@@ -136,3 +136,14 @@ Melhorar a deteccao do titulo usando `meta`, `title` e `h1`, e abrir um campo ma
 
 Motivo:
 Evita travar a personalizacao da vaga e deixa o usuario no controle quando a automacao nao encontra um titulo valido.
+
+### D013 - Explicar os gaps do score em modo compacto e expansivel
+
+Contexto:
+O breakdown visual mostrava a nota por categoria, mas ainda faltava mostrar com clareza o que exatamente estava pesando contra o score.
+
+Decisao:
+Adicionar um resumo curto por categoria e um expander com os pontos faltantes mais relevantes.
+
+Motivo:
+Ajuda o usuario a agir sobre o score sem precisar inferir sozinho o que melhorar em cada bloco.

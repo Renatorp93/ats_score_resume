@@ -770,6 +770,8 @@ def sanitize_job_title(value: str | None) -> str | None:
 
     cleaned = value.strip()
     cleaned = re.sub(r"\s+", " ", cleaned)
+    cleaned = re.sub(r"^.+?\bhiring\b\s+", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"^.+?\bcontrata(?:ndo)?\b\s+", "", cleaned, flags=re.IGNORECASE)
     cleaned = cleaned.split("|")[0].strip()
     cleaned = re.sub(r"\s*-\s*id\s*\d+\b.*$", "", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"\s*\(\d+\)\s*$", "", cleaned)

@@ -275,7 +275,7 @@ Python, SQL, AWS
         document,
         job_text="Descrição longa da vaga",
         job_source="https://example.com/job",
-        job_title_override="Engenharia de Dados AWS Sênior - ID 121504 | LinkedIn",
+        job_title_override="GFT Technologies hiring Engenharia de Dados AWS Sênior - ID 121504 | LinkedIn",
     )
 
     assert result.job_match is not None

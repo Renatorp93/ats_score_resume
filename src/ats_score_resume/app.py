@@ -130,12 +130,12 @@ def render_result(result: AnalysisResult, document: ExtractedDocument, job_input
         st.markdown("<div class='info-card'>Nenhuma sugestão crítica encontrada.</div>", unsafe_allow_html=True)
 
     st.subheader("Como o score foi montado")
-    render_breakdown_cards(result.resume.metrics)
+    render_breakdown_cards(result.resume.metrics, build_resume_gap_map(result))
 
     if result.job_match:
         st.subheader("Como a vaga influenciou o resultado")
         st.caption(f"Fonte da vaga: {result.job_match.source}")
-        render_breakdown_cards(result.job_match.metrics)
+        render_breakdown_cards(result.job_match.metrics, build_job_gap_map(result))
         st.markdown(
             "\n".join(
                 [
@@ -486,9 +486,11 @@ def render_suggestion_card(suggestion: Suggestion) -> None:
     )
 
 
-def render_breakdown_cards(metrics: list) -> None:
+def render_breakdown_cards(metrics: list, gap_map: dict[str, list[str]]) -> None:
     for metric in metrics:
         ratio = 0 if metric.max_score == 0 else round((metric.score / metric.max_score) * 100)
+        missing_items = gap_map.get(metric.key, [])
+        missing_summary = summarize_missing_items(missing_items)
         st.markdown(
             f"""
             <div class="breakdown-card">
@@ -501,6 +503,74 @@ def render_breakdown_cards(metrics: list) -> None:
             """,
             unsafe_allow_html=True,
         )
+        if missing_summary:
+            st.caption(missing_summary)
+            with st.expander("Ver pontos que faltaram"):
+                for item in missing_items:
+                    st.markdown(f"- {item}")
+
+
+def build_resume_gap_map(result: AnalysisResult) -> dict[str, list[str]]:
+    gaps: dict[str, list[str]] = {
+        "parsing_format": [],
+        "completeness": [],
+        "content_quality": [],
+    }
+
+    if result.resume.format_risks:
+        gaps["parsing_format"].extend(result.resume.format_risks)
+    if result.resume.missing_sections:
+        gaps["parsing_format"].append(
+            "Padronizar os headings principais ajuda a leitura do ATS."
+        )
+
+    required_contacts = {"email": "Adicionar e-mail.", "telefone": "Adicionar telefone.", "localizacao": "Adicionar localização."}
+    for key, message in required_contacts.items():
+        if key not in result.resume.contact_hits:
+            gaps["completeness"].append(message)
+    for section in result.resume.missing_sections:
+        gaps["completeness"].append(f"Incluir a seção {display_section_name(section)}.")
+
+    if result.resume.quantified_achievement_count < 2:
+        gaps["content_quality"].append("Adicionar mais resultados com números ou percentuais.")
+    if result.resume.action_bullet_count < 3:
+        gaps["content_quality"].append("Usar mais bullets iniciando com verbos de ação.")
+    if len(result.resume.keyword_terms) < 8:
+        gaps["content_quality"].append("Expandir a densidade de hard skills relevantes.")
+
+    return gaps
+
+
+def build_job_gap_map(result: AnalysisResult) -> dict[str, list[str]]:
+    if not result.job_match:
+        return {}
+
+    gaps: dict[str, list[str]] = {
+        "keyword_coverage": [f"Incluir ou reforçar: {term}" for term in result.job_match.missing_keywords[:10]],
+        "required_terms": [f"Comprovar requisito: {term}" for term in result.job_match.missing_required_terms[:10]],
+        "title_alignment": [],
+        "evidence_alignment": [],
+        "terminology_fidelity": [],
+    }
+
+    if not result.job_match.job_title:
+        gaps["title_alignment"].append("Preencher manualmente o título da vaga para melhorar o alinhamento.")
+    else:
+        gaps["title_alignment"].append(f"Confirmar se o título alvo deve ser: {result.job_match.job_title}.")
+    if result.job_match.missing_required_terms:
+        gaps["evidence_alignment"].append("Mover requisitos confirmados para experiência, resumo ou skills.")
+    if result.job_match.missing_keywords:
+        gaps["terminology_fidelity"].append("Usar a mesma grafia da vaga para ferramentas e tecnologias principais.")
+
+    return gaps
+
+
+def summarize_missing_items(items: list[str]) -> str:
+    if not items:
+        return ""
+    if len(items) == 1:
+        return "Faltou 1 ponto de atenção."
+    return f"Faltaram {len(items)} pontos de atenção."
 
 
 def score_color(score: int) -> str:
