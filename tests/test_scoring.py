@@ -1,5 +1,6 @@
+from ats_score_resume.app import apply_personalization_to_draft
 from ats_score_resume.document_parser import ExtractedDocument
-from ats_score_resume.exporters import build_docx_resume
+from ats_score_resume.exporters import build_docx_resume, build_html_resume
 from ats_score_resume.scoring import analyze_document, analyze_resume, generate_resume_draft
 
 
@@ -144,8 +145,7 @@ Required:
 
     assert "RESUMO PROFISSIONAL" in generated_resume
     assert "SKILLS" in generated_resume
-    assert "PERSONALIZACAO PARA ESTA VAGA" in generated_resume
-    assert "SQL" in generated_resume or "sql" in generated_resume
+    assert "PERSONALIZACAO PARA ESTA VAGA" not in generated_resume
 
 
 def test_competencias_tecnicas_is_detected_as_skills_section() -> None:
@@ -183,3 +183,65 @@ def test_docx_exporter_returns_document_bytes() -> None:
     docx_bytes = build_docx_resume(content)
 
     assert len(docx_bytes) > 100
+
+
+def test_html_exporter_returns_html_document() -> None:
+    html_content = build_html_resume("NOME\n\nSKILLS\nPython, SQL")
+
+    assert "<html>" in html_content.lower()
+    assert "Python, SQL" in html_content
+
+
+def test_personalization_updates_title_and_skills_section() -> None:
+    draft = """
+ANA SOUZA
+ana@example.com
+
+RESUMO PROFISSIONAL
+Profissional com experiencia em dados.
+
+SKILLS
+Python, SQL
+""".strip()
+
+    updated = apply_personalization_to_draft(draft, "Senior Data Analyst", ["Power BI", "AWS"])
+
+    assert "Senior Data Analyst" in updated.splitlines()[:4]
+    assert "Python, SQL, Power BI, AWS" in updated
+
+
+def test_job_title_ignores_navigation_noise_from_page() -> None:
+    document = make_document(
+        "resume.txt",
+        ".txt",
+        """
+Marina Rocha
+marina@example.com
+
+Resumo
+Profissional com experiencia em dados e analytics.
+
+Experiencia
+2020 - 2025
+- Liderou automacoes com Python.
+
+Educacao
+Bacharelado em Sistemas de Informacao
+
+Skills
+Python, SQL, Analytics
+""",
+    )
+
+    job_description = """
+Skip to main content
+Senior Data Analyst
+Required:
+- Python
+- SQL
+"""
+
+    result = analyze_document(document, job_text=job_description, job_source="descricao manual")
+
+    assert result.job_match is not None
+    assert result.job_match.job_title == "Senior Data Analyst"

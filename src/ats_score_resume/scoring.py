@@ -78,6 +78,14 @@ SECTION_DISPLAY_NAMES = {
     "skills": "Skills",
     "certifications": "Certificacoes",
 }
+NOISE_JOB_TITLE_LINES = {
+    "skip to main content",
+    "start of main content",
+    "main content",
+    "job description",
+    "apply now",
+    "sign in",
+}
 
 DATE_PATTERN = re.compile(
     r"\b(?:"
@@ -376,10 +384,6 @@ def generate_resume_draft(document: ExtractedDocument, result: AnalysisResult) -
     if certifications_block:
         blocks.append(certifications_block)
 
-    customization_block = build_customization_block(result)
-    if customization_block:
-        blocks.append(customization_block)
-
     return "\n\n".join(block for block in blocks if block).strip()
 
 
@@ -519,26 +523,6 @@ def build_optional_section(title: str, lines: list[str]) -> str:
     if not lines:
         return ""
     return f"{title}\n" + "\n".join(lines)
-
-
-def build_customization_block(result: AnalysisResult) -> str:
-    if not result.job_match:
-        return ""
-
-    lines = ["PERSONALIZACAO PARA ESTA VAGA"]
-    if result.job_match.job_title:
-        lines.append(f"Titulo alvo: {result.job_match.job_title}")
-    if result.job_match.missing_required_terms:
-        lines.append(
-            "Validar e adicionar apenas se verdadeiro: "
-            + ", ".join(result.job_match.missing_required_terms[:6])
-        )
-    if result.job_match.missing_keywords:
-        lines.append(
-            "Keywords para considerar no resumo, skills ou experiencia: "
-            + ", ".join(result.job_match.missing_keywords[:6])
-        )
-    return "\n".join(lines)
 
 
 def collect_inline_items(lines: list[str]) -> list[str]:
@@ -751,9 +735,22 @@ def extract_required_terms(job_text: str) -> list[str]:
 def extract_job_title(job_text: str) -> str | None:
     for line in split_nonempty_lines(job_text)[:12]:
         normalized_line = normalize_for_matching(line)
-        if 2 <= len(line.split()) <= 8 and not any(marker in normalized_line for marker in REQUIRED_MARKERS):
+        if (
+            2 <= len(line.split()) <= 8
+            and not any(marker in normalized_line for marker in REQUIRED_MARKERS)
+            and looks_like_job_title(line)
+        ):
             return line.strip()
     return None
+
+
+def looks_like_job_title(line: str) -> bool:
+    normalized = normalize_for_matching(line)
+    if normalized in NOISE_JOB_TITLE_LINES:
+        return False
+    if any(token in normalized for token in ("cookie", "privacy", "search", "navigation", "content")):
+        return False
+    return True
 
 
 def score_title_alignment(job_title: str | None, resume_text: str, job_text: str) -> int:

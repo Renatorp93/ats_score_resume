@@ -9,9 +9,10 @@ Aplicacao local para analisar curriculos com foco em compatibilidade com ATS, ge
 3. Sugere modificacoes praticas para aumentar o score.
 4. Destaca o resultado com painel visual e velocimetro de score.
 5. Gera um rascunho de curriculo otimizado com base nas dicas encontradas.
-6. Permite validar o rascunho e baixar o curriculo final em `TXT` ou `DOCX`.
-7. Calcula um `Job Match Score` quando a vaga e informada.
-8. Explica o breakdown do score por criterio.
+6. Separa a personalizacao da vaga do rascunho principal e permite aplicar apenas o que o usuario confirmar.
+7. Permite validar o rascunho e baixar o curriculo final em `TXT`, `MD`, `DOCX` ou `HTML`.
+8. Calcula um `Job Match Score` quando a vaga e informada.
+9. Explica o breakdown do score por criterio.
 
 ## Stack
 

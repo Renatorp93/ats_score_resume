@@ -114,3 +114,14 @@ Substituir a tabela por cards com linguagem mais humana e adicionar um velocimet
 
 Motivo:
 Facilita a interpretacao do resultado e deixa a experiencia mais clara e atraente.
+
+### D011 - Separar a personalizacao da vaga do rascunho final
+
+Contexto:
+O bloco `PERSONALIZACAO PARA ESTA VAGA` nao deveria aparecer no corpo final do curriculo.
+
+Decisao:
+Mover a personalizacao para uma sessao propria antes do rascunho, com aplicacao explicita pelo usuario.
+
+Motivo:
+Mantem o curriculo final limpo e evita que instrucoes internas vazem para o documento exportado.

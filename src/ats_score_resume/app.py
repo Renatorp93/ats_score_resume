@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import html
 import math
+import re
 
 import streamlit as st
 
 from ats_score_resume.document_parser import ExtractedDocument, UnsupportedFileTypeError, extract_document
-from ats_score_resume.exporters import build_docx_resume
+from ats_score_resume.exporters import build_docx_resume, build_html_resume
 from ats_score_resume.job_source import JobSourceError, resolve_job_input
 from ats_score_resume.scoring import AnalysisResult, Suggestion, analyze_document, display_section_name, generate_resume_draft
 
@@ -85,20 +87,16 @@ def render_result(result: AnalysisResult, document: ExtractedDocument) -> None:
     with hero_col:
         render_gauge("Overall Score", result.overall_score, score_status(result.overall_score))
     with metrics_col:
-        st.markdown("<div class='metrics-grid'>", unsafe_allow_html=True)
         render_score_chip("Base ATS", result.resume.score, "Qualidade geral do curriculo para leitura automatizada.")
         if result.job_match:
             render_score_chip("Aderencia a vaga", result.job_match.score, "Conexao entre o seu curriculo e a oportunidade.")
         render_score_chip("Nivel atual", result.overall_score, summary_status_copy(result.overall_score))
-        st.markdown("</div>", unsafe_allow_html=True)
 
     st.subheader("Resumo da analise")
     detected_sections = [display_section_name(section) for section in result.resume.detected_sections]
     missing_sections = [display_section_name(section) for section in result.resume.missing_sections]
     skill_heading = result.resume.section_headings.get("skills")
-    heading_note = ""
-    if skill_heading:
-        heading_note = f" Secao de skills reconhecida como: `{skill_heading}`."
+    heading_note = f" Secao de skills reconhecida como: `{skill_heading}`." if skill_heading else ""
 
     st.markdown(
         "\n".join(
@@ -135,45 +133,174 @@ def render_result(result: AnalysisResult, document: ExtractedDocument) -> None:
             )
         )
 
-    st.subheader("Curriculo otimizado")
-    with st.expander("Gerar rascunho com base nas dicas do ATS", expanded=True):
-        widget_key = f"resume_draft_{document.filename}_{result.overall_score}"
-        if widget_key not in st.session_state:
-            st.session_state[widget_key] = generate_resume_draft(document, result)
+    draft_key = build_state_key(document.filename, result.overall_score, "draft")
+    ensure_draft_state(draft_key, document, result)
 
+    if result.job_match:
+        render_personalization_section(result, draft_key)
+
+    st.subheader("Curriculo otimizado")
+    with st.expander("Rascunho editavel", expanded=True):
         edited_resume = st.text_area(
             "Rascunho gerado",
-            key=widget_key,
+            key=draft_key,
             height=420,
         )
         st.caption("Revise o texto antes de enviar. Mantenha apenas experiencias e skills que sejam verdadeiras.")
 
-        review_key = f"resume_reviewed_{document.filename}_{result.overall_score}"
+        review_key = build_state_key(document.filename, result.overall_score, "reviewed")
         reviewed = st.checkbox(
             "Revisei o rascunho e quero gerar o arquivo final.",
             key=review_key,
         )
 
         if reviewed:
-            txt_col, docx_col = st.columns(2)
-            with txt_col:
-                st.download_button(
-                    "Baixar arquivo TXT",
-                    data=edited_resume,
-                    file_name=build_generated_filename(document.filename, "txt"),
-                    mime="text/plain",
-                    use_container_width=True,
-                )
-            with docx_col:
-                st.download_button(
-                    "Baixar arquivo DOCX",
-                    data=build_docx_resume(edited_resume),
-                    file_name=build_generated_filename(document.filename, "docx"),
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    use_container_width=True,
-                )
+            render_download_options(document.filename, edited_resume)
         else:
             st.info("Depois de revisar o texto, marque a caixa acima para liberar a geracao do arquivo final.")
+
+
+def render_personalization_section(result: AnalysisResult, draft_key: str) -> None:
+    st.subheader("Personalizacao da vaga")
+    st.markdown(
+        "Essa area serve para adaptar o curriculo antes da geracao final. "
+        "O titulo sugerido funciona melhor no topo do curriculo, perto do cabecalho, e os termos confirmados entram na secao de skills."
+    )
+
+    suggested_terms = personalization_terms(result)
+    title_option = result.job_match.job_title if result.job_match else None
+
+    if title_option:
+        st.markdown(f"- Titulo sugerido para o topo do curriculo: `{title_option}`")
+
+    apply_title = st.checkbox(
+        "Adicionar o titulo sugerido no topo do curriculo",
+        key=f"{draft_key}_apply_title",
+        value=bool(title_option),
+        disabled=not bool(title_option),
+    )
+
+    selected_terms = st.multiselect(
+        "Selecione apenas as skills/termos que voce realmente domina para adicionar na secao Skills",
+        options=suggested_terms,
+        default=suggested_terms[: min(6, len(suggested_terms))],
+        key=f"{draft_key}_selected_terms",
+    )
+
+    if st.button("Aplicar personalizacao ao rascunho", key=f"{draft_key}_apply_button", use_container_width=True):
+        updated_draft = apply_personalization_to_draft(
+            st.session_state[draft_key],
+            title_option if apply_title else None,
+            selected_terms,
+        )
+        st.session_state[draft_key] = updated_draft
+        st.success("Personalizacao aplicada ao rascunho. Revise o texto atualizado abaixo.")
+
+
+def render_download_options(filename: str, resume_text: str) -> None:
+    txt_col, md_col = st.columns(2)
+    with txt_col:
+        st.download_button(
+            "Baixar em TXT",
+            data=resume_text,
+            file_name=build_generated_filename(filename, "txt"),
+            mime="text/plain",
+            use_container_width=True,
+        )
+    with md_col:
+        st.download_button(
+            "Baixar em MD",
+            data=resume_text,
+            file_name=build_generated_filename(filename, "md"),
+            mime="text/markdown",
+            use_container_width=True,
+        )
+
+    docx_col, html_col = st.columns(2)
+    with docx_col:
+        st.download_button(
+            "Baixar em DOCX",
+            data=build_docx_resume(resume_text),
+            file_name=build_generated_filename(filename, "docx"),
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True,
+        )
+    with html_col:
+        st.download_button(
+            "Baixar em HTML",
+            data=build_html_resume(resume_text),
+            file_name=build_generated_filename(filename, "html"),
+            mime="text/html",
+            use_container_width=True,
+        )
+
+
+def ensure_draft_state(draft_key: str, document: ExtractedDocument, result: AnalysisResult) -> None:
+    if draft_key not in st.session_state:
+        st.session_state[draft_key] = generate_resume_draft(document, result)
+
+
+def personalization_terms(result: AnalysisResult) -> list[str]:
+    if not result.job_match:
+        return []
+
+    ordered: list[str] = []
+    for term in [*result.job_match.missing_required_terms, *result.job_match.missing_keywords]:
+        if term not in ordered:
+            ordered.append(term)
+    return ordered[:12]
+
+
+def apply_personalization_to_draft(draft_text: str, title: str | None, selected_terms: list[str]) -> str:
+    updated = draft_text
+    if title:
+        updated = upsert_top_title(updated, title)
+    if selected_terms:
+        updated = merge_terms_into_skills(updated, selected_terms)
+    return updated
+
+
+def upsert_top_title(draft_text: str, title: str) -> str:
+    lines = draft_text.splitlines()
+    if not lines:
+        return title
+
+    title_line = title.strip()
+    if title_line in lines:
+        return draft_text
+
+    insert_at = 1
+    while insert_at < len(lines) and lines[insert_at].strip():
+        insert_at += 1
+
+    updated_lines = lines[:insert_at] + [title_line] + lines[insert_at:]
+    return "\n".join(updated_lines).strip()
+
+
+def merge_terms_into_skills(draft_text: str, selected_terms: list[str]) -> str:
+    match = re.search(r"(?ms)^SKILLS\s*\n(.*?)(?=\n[A-Z][A-Z ]+\n|\Z)", draft_text)
+    cleaned_terms = unique_terms(selected_terms)
+
+    if match:
+        existing = [item.strip() for item in re.split(r"[,\n;|]", match.group(1)) if item.strip()]
+        merged = unique_terms(existing + cleaned_terms)
+        replacement = "SKILLS\n" + ", ".join(merged)
+        return draft_text[: match.start()] + replacement + draft_text[match.end() :]
+
+    skills_block = "SKILLS\n" + ", ".join(cleaned_terms)
+    return draft_text.rstrip() + "\n\n" + skills_block
+
+
+def unique_terms(items: list[str]) -> list[str]:
+    seen: dict[str, str] = {}
+    for item in items:
+        clean = item.strip()
+        if not clean:
+            continue
+        key = clean.casefold()
+        if key not in seen:
+            seen[key] = clean
+    return list(seen.values())
 
 
 def inject_styles() -> None:
@@ -195,10 +322,7 @@ def inject_styles() -> None:
             border: 1px solid rgba(148,163,184,0.18);
             box-shadow: 0 18px 40px rgba(15,23,42,0.08);
         }
-        .score-card {
-            padding: 18px 20px;
-            margin-bottom: 14px;
-        }
+        .score-card { padding: 18px 20px; margin-bottom: 14px; }
         .score-card .eyebrow,
         .breakdown-card .eyebrow {
             color: #64748b;
@@ -212,19 +336,13 @@ def inject_styles() -> None:
             color: #0f172a;
             margin-top: 6px;
         }
-        .score-card .helper {
-            color: #475569;
-            margin-top: 8px;
-            font-size: 0.96rem;
-        }
+        .score-card .helper { color: #475569; margin-top: 8px; font-size: 0.96rem; }
         .suggestion-card {
             padding: 16px 18px;
             margin-bottom: 12px;
             border-left: 6px solid #f59e0b;
         }
-        .suggestion-card.priority-media {
-            border-left-color: #2563eb;
-        }
+        .suggestion-card.priority-media { border-left-color: #2563eb; }
         .suggestion-card .badge {
             display: inline-block;
             font-size: 0.78rem;
@@ -235,12 +353,8 @@ def inject_styles() -> None:
             margin-bottom: 10px;
             letter-spacing: 0.05em;
         }
-        .suggestion-card .badge-alta {
-            background: linear-gradient(135deg, #f97316, #dc2626);
-        }
-        .suggestion-card .badge-media {
-            background: linear-gradient(135deg, #2563eb, #0f766e);
-        }
+        .suggestion-card .badge-alta { background: linear-gradient(135deg, #f97316, #dc2626); }
+        .suggestion-card .badge-media { background: linear-gradient(135deg, #2563eb, #0f766e); }
         .suggestion-card .title {
             font-size: 1.08rem;
             font-weight: 700;
@@ -248,15 +362,8 @@ def inject_styles() -> None:
             margin-bottom: 6px;
         }
         .suggestion-card .details,
-        .breakdown-card .details {
-            color: #334155;
-            font-size: 0.97rem;
-            line-height: 1.45;
-        }
-        .breakdown-card {
-            padding: 18px 20px;
-            margin-bottom: 12px;
-        }
+        .breakdown-card .details { color: #334155; font-size: 0.97rem; line-height: 1.45; }
+        .breakdown-card { padding: 18px 20px; margin-bottom: 12px; }
         .breakdown-card .title {
             font-size: 1.05rem;
             font-weight: 700;
@@ -275,14 +382,8 @@ def inject_styles() -> None:
             border-radius: 999px;
             background: linear-gradient(90deg, #2563eb 0%, #14b8a6 100%);
         }
-        .info-card {
-            padding: 16px 18px;
-            color: #334155;
-        }
-        .gauge-wrap {
-            padding: 16px 8px 8px;
-            text-align: center;
-        }
+        .info-card { padding: 16px 18px; color: #334155; }
+        .gauge-wrap { padding: 16px 8px 8px; text-align: center; }
         .gauge-title {
             color: #475569;
             text-transform: uppercase;
@@ -296,11 +397,7 @@ def inject_styles() -> None:
             color: #0f172a;
             margin-top: -10px;
         }
-        .gauge-subtitle {
-            color: #475569;
-            margin-top: -6px;
-            font-size: 0.98rem;
-        }
+        .gauge-subtitle { color: #475569; margin-top: -6px; font-size: 0.98rem; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -317,8 +414,8 @@ def render_gauge(title: str, score: int, subtitle: str) -> None:
 
     gauge_html = f"""
     <div class="score-card gauge-wrap">
-        <div class="gauge-title">{title}</div>
-        <svg width="240" height="150" viewBox="0 0 240 150" role="img" aria-label="{title} {score} de 100">
+        <div class="gauge-title">{html.escape(title)}</div>
+        <svg width="240" height="150" viewBox="0 0 240 150" role="img" aria-label="{html.escape(title)} {score} de 100">
             <path d="M 32 120 A 88 88 0 0 1 208 120" fill="none" stroke="#dbeafe" stroke-width="18" stroke-linecap="round"></path>
             <path d="M 32 120 A 88 88 0 0 1 208 120" fill="none" stroke="{color}" stroke-width="18" stroke-linecap="round"
                 stroke-dasharray="{circumference:.2f}" stroke-dashoffset="{offset:.2f}"></path>
@@ -328,7 +425,7 @@ def render_gauge(title: str, score: int, subtitle: str) -> None:
             <circle cx="120" cy="120" r="10" fill="#0f172a"></circle>
         </svg>
         <div class="gauge-score">{score}/100</div>
-        <div class="gauge-subtitle">{subtitle}</div>
+        <div class="gauge-subtitle">{html.escape(subtitle)}</div>
     </div>
     """
     st.markdown(gauge_html, unsafe_allow_html=True)
@@ -338,9 +435,9 @@ def render_score_chip(title: str, score: int, helper: str) -> None:
     st.markdown(
         f"""
         <div class="score-card">
-            <div class="eyebrow">{title}</div>
+            <div class="eyebrow">{html.escape(title)}</div>
             <div class="value">{score}/100</div>
-            <div class="helper">{helper}</div>
+            <div class="helper">{html.escape(helper)}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -352,9 +449,9 @@ def render_suggestion_card(suggestion: Suggestion) -> None:
     st.markdown(
         f"""
         <div class="suggestion-card priority-{suggestion.priority}">
-            <span class="badge {priority_class}">{suggestion.priority.upper()}</span>
-            <div class="title">{suggestion.title}</div>
-            <div class="details">{suggestion.details}</div>
+            <span class="badge {priority_class}">{html.escape(suggestion.priority.upper())}</span>
+            <div class="title">{html.escape(suggestion.title)}</div>
+            <div class="details">{html.escape(suggestion.details)}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -367,11 +464,11 @@ def render_breakdown_cards(metrics: list) -> None:
         st.markdown(
             f"""
             <div class="breakdown-card">
-                <div class="eyebrow">{score_status(ratio)}</div>
-                <div class="title">{metric.label}</div>
+                <div class="eyebrow">{html.escape(score_status(ratio))}</div>
+                <div class="title">{html.escape(metric.label)}</div>
                 <div class="details"><strong>{metric.score}/{metric.max_score}</strong> pontos</div>
                 <div class="meter"><div class="meter-fill" style="width:{ratio}%"></div></div>
-                <div class="details">{metric.details}</div>
+                <div class="details">{html.escape(metric.details)}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -405,6 +502,11 @@ def summary_status_copy(score: int) -> str:
 def build_generated_filename(filename: str, extension: str) -> str:
     base_name = filename.rsplit(".", maxsplit=1)[0]
     return f"{base_name}_otimizado.{extension}"
+
+
+def build_state_key(filename: str, score: int, suffix: str) -> str:
+    sanitized = re.sub(r"[^A-Za-z0-9_-]", "_", filename)
+    return f"{sanitized}_{score}_{suffix}"
 
 
 if __name__ == "__main__":
