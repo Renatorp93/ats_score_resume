@@ -235,6 +235,7 @@ Python, SQL, Analytics
 
     job_description = """
 Skip to main content
+Clear text
 Senior Data Analyst
 Required:
 - Python

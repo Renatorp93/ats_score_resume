@@ -17,28 +17,28 @@ def main() -> None:
     inject_styles()
 
     st.title("ATS Score Resume")
-    st.caption("Analise curriculos com score explicavel de prontidao ATS e aderencia a vagas.")
+    st.caption("Analise currículos com score explicável de prontidão para ATS e aderência a vagas.")
 
     with st.sidebar:
         st.subheader("Como o score funciona")
         st.markdown(
             "\n".join(
                 [
-                    "- `Base ATS`: leitura pelo ATS, estrutura e forca do conteudo.",
-                    "- `Aderencia a vaga`: palavras-chave, requisitos e alinhamento com a oportunidade.",
-                    "- `Overall`: media ponderada quando a vaga e informada.",
+                    "- `Base ATS`: leitura pelo ATS, estrutura e força do conteúdo.",
+                    "- `Aderência à vaga`: palavras-chave, requisitos e alinhamento com a oportunidade.",
+                    "- `Overall`: média ponderada quando a vaga é informada.",
                 ]
             )
         )
 
-    resume_file = st.file_uploader("Envie o curriculo", type=["pdf", "docx", "txt", "md"])
+    resume_file = st.file_uploader("Envie o currículo", type=["pdf", "docx", "txt", "md"])
     col1, col2 = st.columns(2)
 
     with col1:
         job_description = st.text_area(
-            "Descricao da vaga (opcional)",
+            "Descrição da vaga (opcional)",
             height=260,
-            placeholder="Cole aqui a descricao da vaga para calcular aderencia.",
+            placeholder="Cole aqui a descrição da vaga para calcular aderência.",
         )
 
     with col2:
@@ -46,75 +46,82 @@ def main() -> None:
             "URL da vaga (opcional)",
             placeholder="https://empresa.com/jobs/123",
         )
-        st.info("Se a URL nao puder ser lida, voce ainda pode colar a descricao manualmente.")
+        st.info("Se a URL não puder ser lida, você ainda pode colar a descrição manualmente.")
 
-    run_analysis = st.button("Analisar curriculo", type="primary", use_container_width=True)
-    if not run_analysis:
-        return
+    run_analysis = st.button("Analisar currículo", type="primary", use_container_width=True)
+    state_key = "latest_analysis"
 
-    if resume_file is None:
-        st.error("Envie um curriculo para iniciar a analise.")
-        return
+    if run_analysis:
+        if resume_file is None:
+            st.error("Envie um currículo para iniciar a análise.")
+            return
 
-    try:
-        document = extract_document(resume_file.name, resume_file.getvalue())
-    except UnsupportedFileTypeError as exc:
-        st.error(str(exc))
-        return
-    except Exception as exc:  # pragma: no cover
-        st.error(f"Nao foi possivel ler o arquivo enviado: {exc}")
-        return
-
-    job_input = None
-    if job_description.strip() or job_url.strip():
         try:
-            job_input = resolve_job_input(job_description, job_url)
-        except JobSourceError as exc:
-            st.warning(str(exc))
+            document = extract_document(resume_file.name, resume_file.getvalue())
+        except UnsupportedFileTypeError as exc:
+            st.error(str(exc))
+            return
+        except Exception as exc:  # pragma: no cover
+            st.error(f"Não foi possível ler o arquivo enviado: {exc}")
+            return
 
-    result = analyze_document(
-        document=document,
-        job_text=job_input.text if job_input else None,
-        job_source=job_input.source if job_input else "",
-    )
-    render_result(result, document)
+        job_input = None
+        if job_description.strip() or job_url.strip():
+            try:
+                job_input = resolve_job_input(job_description, job_url)
+            except JobSourceError as exc:
+                st.warning(str(exc))
+
+        result = analyze_document(
+            document=document,
+            job_text=job_input.text if job_input else None,
+            job_source=job_input.source if job_input else "",
+        )
+        st.session_state[state_key] = {
+            "document": document,
+            "result": result,
+        }
+
+    saved_analysis = st.session_state.get(state_key)
+    if saved_analysis:
+        render_result(saved_analysis["result"], saved_analysis["document"])
 
 
 def render_result(result: AnalysisResult, document: ExtractedDocument) -> None:
-    st.success(f"Analise concluida para `{document.filename}`.")
+    st.success(f"Análise concluída para `{document.filename}`.")
 
     hero_col, metrics_col = st.columns((1.1, 1), gap="large")
     with hero_col:
         render_gauge("Overall Score", result.overall_score, score_status(result.overall_score))
     with metrics_col:
-        render_score_chip("Base ATS", result.resume.score, "Qualidade geral do curriculo para leitura automatizada.")
+        render_score_chip("Base ATS", result.resume.score, "Qualidade geral do currículo para leitura automatizada.")
         if result.job_match:
-            render_score_chip("Aderencia a vaga", result.job_match.score, "Conexao entre o seu curriculo e a oportunidade.")
-        render_score_chip("Nivel atual", result.overall_score, summary_status_copy(result.overall_score))
+            render_score_chip("Aderência à vaga", result.job_match.score, "Conexão entre o seu currículo e a oportunidade.")
+        render_score_chip("Nível atual", result.overall_score, summary_status_copy(result.overall_score))
 
-    st.subheader("Resumo da analise")
+    st.subheader("Resumo da análise")
     detected_sections = [display_section_name(section) for section in result.resume.detected_sections]
     missing_sections = [display_section_name(section) for section in result.resume.missing_sections]
     skill_heading = result.resume.section_headings.get("skills")
-    heading_note = f" Secao de skills reconhecida como: `{skill_heading}`." if skill_heading else ""
+    heading_note = f" Seção de skills reconhecida como: `{skill_heading}`." if skill_heading else ""
 
     st.markdown(
         "\n".join(
             [
-                f"- Secoes detectadas: {', '.join(detected_sections) or 'nenhuma secao padrao detectada'}",
-                f"- Secoes ausentes: {', '.join(missing_sections) or 'nenhuma'}",
+                f"- Seções detectadas: {', '.join(detected_sections) or 'nenhuma seção padrão detectada'}",
+                f"- Seções ausentes: {', '.join(missing_sections) or 'nenhuma'}",
                 f"- Skills detectadas: {', '.join(result.resume.keyword_terms[:8]) or 'nenhuma'}",
                 f"- Contato identificado: {', '.join(result.resume.contact_hits) or 'insuficiente'}." + heading_note,
             ]
         )
     )
 
-    st.subheader("Sugestoes para aumentar o score")
+    st.subheader("Sugestões para aumentar o score")
     if result.suggestions:
         for suggestion in result.suggestions:
             render_suggestion_card(suggestion)
     else:
-        st.markdown("<div class='info-card'>Nenhuma sugestao critica encontrada.</div>", unsafe_allow_html=True)
+        st.markdown("<div class='info-card'>Nenhuma sugestão crítica encontrada.</div>", unsafe_allow_html=True)
 
     st.subheader("Como o score foi montado")
     render_breakdown_cards(result.resume.metrics)
@@ -139,14 +146,14 @@ def render_result(result: AnalysisResult, document: ExtractedDocument) -> None:
     if result.job_match:
         render_personalization_section(result, draft_key)
 
-    st.subheader("Curriculo otimizado")
-    with st.expander("Rascunho editavel", expanded=True):
+    st.subheader("Currículo otimizado")
+    with st.expander("Rascunho editável", expanded=True):
         edited_resume = st.text_area(
             "Rascunho gerado",
             key=draft_key,
             height=420,
         )
-        st.caption("Revise o texto antes de enviar. Mantenha apenas experiencias e skills que sejam verdadeiras.")
+        st.caption("Revise o texto antes de enviar. Mantenha apenas experiências e skills que sejam verdadeiras.")
 
         review_key = build_state_key(document.filename, result.overall_score, "reviewed")
         reviewed = st.checkbox(
@@ -157,44 +164,45 @@ def render_result(result: AnalysisResult, document: ExtractedDocument) -> None:
         if reviewed:
             render_download_options(document.filename, edited_resume)
         else:
-            st.info("Depois de revisar o texto, marque a caixa acima para liberar a geracao do arquivo final.")
+            st.info("Depois de revisar o texto, marque a caixa acima para liberar a geração do arquivo final.")
 
 
 def render_personalization_section(result: AnalysisResult, draft_key: str) -> None:
-    st.subheader("Personalizacao da vaga")
+    st.subheader("Personalização da vaga")
     st.markdown(
-        "Essa area serve para adaptar o curriculo antes da geracao final. "
-        "O titulo sugerido funciona melhor no topo do curriculo, perto do cabecalho, e os termos confirmados entram na secao de skills."
+        "Essa área serve para adaptar o currículo antes da geração final. "
+        "O título sugerido funciona melhor no topo do currículo, perto do cabeçalho, e os termos confirmados entram na seção de skills."
     )
 
     suggested_terms = personalization_terms(result)
     title_option = result.job_match.job_title if result.job_match else None
 
     if title_option:
-        st.markdown(f"- Titulo sugerido para o topo do curriculo: `{title_option}`")
+        st.markdown(f"- Título sugerido para o topo do currículo: `{title_option}`")
 
     apply_title = st.checkbox(
-        "Adicionar o titulo sugerido no topo do curriculo",
+        "Adicionar o título sugerido no topo do currículo",
         key=f"{draft_key}_apply_title",
         value=bool(title_option),
         disabled=not bool(title_option),
     )
 
     selected_terms = st.multiselect(
-        "Selecione apenas as skills/termos que voce realmente domina para adicionar na secao Skills",
+        "Selecione apenas as skills/termos que você realmente domina para adicionar na seção Skills",
         options=suggested_terms,
         default=suggested_terms[: min(6, len(suggested_terms))],
         key=f"{draft_key}_selected_terms",
     )
 
-    if st.button("Aplicar personalizacao ao rascunho", key=f"{draft_key}_apply_button", use_container_width=True):
+    if st.button("Aplicar personalização ao rascunho", key=f"{draft_key}_apply_button", use_container_width=True):
         updated_draft = apply_personalization_to_draft(
             st.session_state[draft_key],
             title_option if apply_title else None,
             selected_terms,
         )
         st.session_state[draft_key] = updated_draft
-        st.success("Personalizacao aplicada ao rascunho. Revise o texto atualizado abaixo.")
+        st.toast("Personalização aplicada ao rascunho.")
+        st.rerun()
 
 
 def render_download_options(filename: str, resume_text: str) -> None:
@@ -488,15 +496,15 @@ def score_status(score: int) -> str:
         return "Muito forte"
     if score >= 60:
         return "Bom potencial"
-    return "Precisa de reforco"
+    return "Precisa de reforço"
 
 
 def summary_status_copy(score: int) -> str:
     if score >= 80:
-        return "Seu curriculo ja esta competitivo e com boa leitura automatizada."
+        return "Seu currículo já está competitivo e com boa leitura automatizada."
     if score >= 60:
-        return "Ha uma base boa, com espaco claro para subir o score."
-    return "Vale ajustar estrutura e conteudo antes de usar em processos seletivos."
+        return "Há uma base boa, com espaço claro para subir o score."
+    return "Vale ajustar estrutura e conteúdo antes de usar em processos seletivos."
 
 
 def build_generated_filename(filename: str, extension: str) -> str:

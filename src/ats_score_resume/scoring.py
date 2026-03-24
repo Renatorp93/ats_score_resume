@@ -73,15 +73,16 @@ SECTION_ALIASES = {
 CANONICAL_SKILL_HEADINGS = {"skills", "technical skills"}
 SECTION_DISPLAY_NAMES = {
     "summary": "Resumo profissional",
-    "experience": "Experiencia profissional",
-    "education": "Educacao",
+    "experience": "Experiência profissional",
+    "education": "Educação",
     "skills": "Skills",
-    "certifications": "Certificacoes",
+    "certifications": "Certificações",
 }
 NOISE_JOB_TITLE_LINES = {
     "skip to main content",
     "start of main content",
     "main content",
+    "clear text",
     "job description",
     "apply now",
     "sign in",
@@ -224,35 +225,35 @@ def analyze_job_match(resume_text: str, job_text: str | None, source: str) -> Jo
             label="Palavras-chave da vaga",
             score=keyword_score,
             max_score=35,
-            details=f"{len(matched_keywords)} de {len(job_terms) or 0} termos principais aparecem no curriculo.",
+            details=f"{len(matched_keywords)} de {len(job_terms) or 0} termos principais aparecem no currículo.",
         ),
         MetricResult(
             key="required_terms",
-            label="Requisitos obrigatorios",
+            label="Requisitos obrigatórios",
             score=required_score,
             max_score=25,
-            details=f"{len(required_overlap)} de {len(required_terms) or 0} requisitos explicitos aparecem no curriculo.",
+            details=f"{len(required_overlap)} de {len(required_terms) or 0} requisitos explícitos aparecem no currículo.",
         ),
         MetricResult(
             key="title_alignment",
-            label="Titulo e senioridade",
+            label="Título e senioridade",
             score=title_score,
             max_score=15,
-            details=f"Titulo da vaga identificado como: {job_title or 'nao identificado'}.",
+            details=f"Título da vaga identificado como: {job_title or 'não identificado'}.",
         ),
         MetricResult(
             key="evidence_alignment",
-            label="Experiencia e formacao",
+            label="Experiência e formação",
             score=experience_education_score,
             max_score=15,
-            details="Verifica se termos de experiencia e formacao da vaga aparecem no curriculo.",
+            details="Verifica se termos de experiência e formação da vaga aparecem no currículo.",
         ),
         MetricResult(
             key="terminology_fidelity",
-            label="Termos tecnicos",
+            label="Termos técnicos",
             score=terminology_score,
             max_score=10,
-            details="Premia siglas e frases tecnicas que batem exatamente com a vaga.",
+            details="Premia siglas e frases técnicas que batem exatamente com a vaga.",
         ),
     ]
 
@@ -278,8 +279,8 @@ def build_suggestions(
         suggestions.append(
             Suggestion(
                 priority="alta",
-                title="Considere manter uma versao DOCX do curriculo",
-                details="PDF pode funcionar bem, mas DOCX costuma ser a opcao mais previsivel para parsing ATS quando a vaga nao exige PDF.",
+                title="Considere manter uma versão DOCX do currículo",
+                details="PDF pode funcionar bem, mas DOCX costuma ser a opção mais previsível para leitura em ATS quando a vaga não exige PDF.",
             )
         )
 
@@ -288,16 +289,16 @@ def build_suggestions(
             suggestions.append(
                 Suggestion(
                     priority="alta",
-                    title="Renomeie a secao de competencias para Skills ou Technical Skills",
-                    details="Seu curriculo parece ter termos tecnicos relevantes, mas vale usar um titulo mais padrao para facilitar a leitura por ATS.",
+                    title="Renomeie a seção de competências para Skills ou Technical Skills",
+                    details="Seu currículo parece ter termos técnicos relevantes, mas vale usar um título mais padrão para facilitar a leitura por ATS.",
                 )
             )
         else:
             suggestions.append(
                 Suggestion(
                     priority="alta",
-                    title="Crie uma secao de skills dedicada",
-                    details="Liste hard skills, ferramentas, linguagens, metodologias e certificacoes em uma secao clara para facilitar o match por keywords.",
+                    title="Crie uma seção de skills dedicada",
+                    details="Liste hard skills, ferramentas, linguagens, metodologias e certificações em uma seção clara para facilitar o match por keywords.",
                 )
             )
 
@@ -306,8 +307,8 @@ def build_suggestions(
         suggestions.append(
             Suggestion(
                 priority="media",
-                title="Use um titulo mais padrao para a secao de skills",
-                details=f'A secao "{skill_heading}" foi reconhecida, mas "Skills" ou "Technical Skills" tende a ser mais universal para ATS.',
+                title="Use um título mais padrão para a seção de skills",
+                details=f'A seção "{skill_heading}" foi reconhecida, mas "Skills" ou "Technical Skills" tende a ser mais universal para ATS.',
             )
         )
 
@@ -324,8 +325,8 @@ def build_suggestions(
         suggestions.append(
             Suggestion(
                 priority="alta",
-                title="Inclua resultados mensuraveis nas experiencias",
-                details="Troque descricoes genericas por bullets com numeros, percentuais, prazos, volumes ou economias geradas.",
+                title="Inclua resultados mensuráveis nas experiências",
+                details="Troque descrições genéricas por bullets com números, percentuais, prazos, volumes ou economias geradas.",
             )
         )
 
@@ -333,7 +334,7 @@ def build_suggestions(
         suggestions.append(
             Suggestion(
                 priority="media",
-                title="Reescreva experiencias com verbos de acao",
+                title="Reescreva experiências com verbos de ação",
                 details="Comece bullets com verbos como implementou, liderou, desenvolveu, improved ou managed para deixar o impacto mais claro.",
             )
         )
@@ -342,8 +343,8 @@ def build_suggestions(
         suggestions.append(
             Suggestion(
                 priority="media",
-                title="Simplifique a formatacao para reduzir risco de parsing",
-                details="Evite excesso de pipes, tabs, icones e layouts que parecam tabelas ou colunas.",
+                title="Simplifique a formatação para reduzir risco de parsing",
+                details="Evite excesso de pipes, tabs, ícones e layouts que pareçam tabelas ou colunas.",
             )
         )
 
@@ -351,8 +352,8 @@ def build_suggestions(
         suggestions.append(
             Suggestion(
                 priority="alta",
-                title="Cubra os requisitos obrigatorios da vaga com a mesma terminologia",
-                details=f"Considere incorporar evidencias para: {', '.join(job_match.missing_required_terms[:5])}.",
+                title="Cubra os requisitos obrigatórios da vaga com a mesma terminologia",
+                details=f"Considere incorporar evidências para: {', '.join(job_match.missing_required_terms[:5])}.",
             )
         )
 
@@ -361,7 +362,7 @@ def build_suggestions(
             Suggestion(
                 priority="alta",
                 title="Aumente a cobertura de keywords da vaga",
-                details=f"Os principais termos ainda ausentes sao: {', '.join(job_match.missing_keywords[:6])}.",
+                details=f"Os principais termos ainda ausentes são: {', '.join(job_match.missing_keywords[:6])}.",
             )
         )
 
@@ -380,7 +381,7 @@ def generate_resume_draft(document: ExtractedDocument, result: AnalysisResult) -
         build_education_block(sections.get("education", [])),
     ]
 
-    certifications_block = build_optional_section("CERTIFICACOES", sections.get("certifications", []))
+    certifications_block = build_optional_section("CERTIFICAÇÕES", sections.get("certifications", []))
     if certifications_block:
         blocks.append(certifications_block)
 
@@ -440,19 +441,19 @@ def build_summary_block(summary_lines: list[str], result: AnalysisResult) -> str
         focus_terms = result.resume.keyword_terms[:4]
         if result.job_match and result.job_match.job_title:
             summary_text = (
-                f"Profissional com experiencia em {format_list_for_sentence(focus_terms)} "
+                f"Profissional com experiência em {format_list_for_sentence(focus_terms)} "
                 f"e foco em oportunidades de {result.job_match.job_title}."
             )
         else:
             summary_text = (
-                f"Profissional com experiencia em {format_list_for_sentence(focus_terms)} "
+                f"Profissional com experiência em {format_list_for_sentence(focus_terms)} "
                 "e foco em resultados, clareza de skills e compatibilidade com ATS."
             )
 
     if result.resume.quantified_achievement_count < 2:
         summary_text = (
             f"{summary_text} "
-            "Inclua um resultado numerico real no resumo para reforcar impacto."
+            "Inclua um resultado numérico real no resumo para reforçar impacto."
         ).strip()
 
     return f"RESUMO PROFISSIONAL\n{summary_text}"
@@ -472,7 +473,7 @@ def build_skills_block(skill_lines: list[str], result: AnalysisResult) -> str:
     if not existing_skills:
         existing_skills = [
             "Adicione aqui suas hard skills principais",
-            "Ex.: Python, SQL, Excel, Power BI, Gestao de Projetos",
+            "Ex.: Python, SQL, Excel, Power BI, Gestão de Projetos",
         ]
 
     return "SKILLS\n" + ", ".join(existing_skills[:16])
@@ -482,9 +483,9 @@ def build_experience_block(experience_lines: list[str], result: AnalysisResult) 
     if not experience_lines:
         experience_lines = [
             "[Cargo] - [Empresa]",
-            "[Periodo]",
-            "- Descreva uma entrega relevante com verbo de acao.",
-            "- Adicione um resultado numerico real: ex. reduzi prazo em 20%.",
+            "[Período]",
+            "- Descreva uma entrega relevante com verbo de ação.",
+            "- Adicione um resultado numérico real: ex. reduzi prazo em 20%.",
         ]
 
     formatted_lines: list[str] = []
@@ -504,19 +505,19 @@ def build_experience_block(experience_lines: list[str], result: AnalysisResult) 
         formatted_lines.append(clean_line if len(clean_line.split()) <= 5 else f"- {clean_line}")
 
     if result.resume.quantified_achievement_count < 2:
-        formatted_lines.append("- [Adicionar um bullet com impacto mensuravel, usando numero ou percentual real.]")
+        formatted_lines.append("- [Adicionar um bullet com impacto mensurável, usando número ou percentual real.]")
 
-    return "EXPERIENCIA PROFISSIONAL\n" + "\n".join(formatted_lines)
+    return "EXPERIÊNCIA PROFISSIONAL\n" + "\n".join(formatted_lines)
 
 
 def build_education_block(education_lines: list[str]) -> str:
     if not education_lines:
         education_lines = [
             "[Curso ou grau]",
-            "[Instituicao] - [Ano de conclusao ou previsao]",
+            "[Instituição] - [Ano de conclusão ou previsão]",
         ]
 
-    return "EDUCACAO\n" + "\n".join(education_lines)
+    return "EDUCAÇÃO\n" + "\n".join(education_lines)
 
 
 def build_optional_section(title: str, lines: list[str]) -> str:
@@ -584,11 +585,11 @@ def detect_format_risks(document: ExtractedDocument, lines: list[str]) -> list[s
     if pipe_lines >= 2:
         risks.append("ha sinais de colunas ou tabelas representadas por pipes")
     if tab_lines >= 2:
-        risks.append("ha muitos tabs, o que pode indicar layout dificil para parsing")
+        risks.append("há muitos tabs, o que pode indicar layout difícil para parsing")
     if icon_hits >= 3:
         risks.append("ha varios icones ou glifos decorativos")
     if len(document.cleaned_text) < 500:
-        risks.append("o texto extraido ficou curto para um curriculo completo")
+        risks.append("o texto extraído ficou curto para um currículo completo")
 
     return risks
 
@@ -628,8 +629,8 @@ def score_parsing_and_format(
     heading_points = clamp_score((len(detected_sections) / 4) * 6, 6)
     score = extension_points + text_points + risk_points + heading_points
     details = (
-        f"Formato {document.extension}, texto extraido com {char_count} caracteres, "
-        f"{len(detected_sections)} secoes principais detectadas e {len(format_risks)} alertas de formatacao."
+        f"Formato {document.extension}, texto extraído com {char_count} caracteres, "
+        f"{len(detected_sections)} seções principais detectadas e {len(format_risks)} alertas de formatação."
     )
     return MetricResult(
         key="parsing_format",
@@ -655,11 +656,11 @@ def score_completeness(contact_hits: list[str], detected_sections: list[str]) ->
     score = contact_score + summary_score + experience_score + education_score + skills_score
     details = (
         f"Contato detectado: {', '.join(contact_hits) or 'insuficiente'}. "
-        f"Secoes detectadas: {', '.join(detected_sections) or 'nenhuma secao padrao detectada'}."
+        f"Seções detectadas: {', '.join(detected_sections) or 'nenhuma seção padrão detectada'}."
     )
     return MetricResult(
         key="completeness",
-        label="Estrutura do curriculo",
+        label="Estrutura do currículo",
         score=score,
         max_score=30,
         details=details,
@@ -685,13 +686,13 @@ def score_content_quality(text: str, normalized_text: str, lines: list[str]) -> 
 
     score = date_score + quantified_score + action_score + skill_score + stuffing_score
     details = (
-        f"{date_hits} referencias de data, {len(quantified_lines)} bullets com numeros, "
-        f"{len(action_lines)} bullets com verbos de acao e {len(skill_terms)} hard skills detectadas."
+        f"{date_hits} referências de data, {len(quantified_lines)} bullets com números, "
+        f"{len(action_lines)} bullets com verbos de ação e {len(skill_terms)} hard skills detectadas."
     )
     return (
         MetricResult(
             key="content_quality",
-            label="Forca do conteudo",
+            label="Força do conteúdo",
             score=score,
             max_score=40,
             details=details,
