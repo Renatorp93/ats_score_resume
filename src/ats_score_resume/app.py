@@ -137,9 +137,9 @@ def render_ai_settings() -> None:
     env_key = os.getenv("OPENAI_API_KEY", "")
     env_model = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 
-    if "openai_api_key" not in st.session_state:
+    if "openai_api_key" not in st.session_state or (not st.session_state.get("openai_api_key") and env_key):
         st.session_state["openai_api_key"] = env_key
-    if "openai_model" not in st.session_state:
+    if "openai_model" not in st.session_state or (not st.session_state.get("openai_model") and env_model):
         st.session_state["openai_model"] = env_model
 
     st.text_input(
