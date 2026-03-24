@@ -169,3 +169,14 @@ Passar a converter descricoes comuns em bullets com verbos de acao, formatar ski
 
 Motivo:
 Melhora a leitura humana do curriculo gerado e evita que o score reaja a ruido que nao representa requisito real da vaga.
+
+### D016 - Usar arquitetura hibrida para otimizar ate uma meta de corte
+
+Contexto:
+As heuristicas explicaveis ajudam a auditar a nota, mas so renomear secoes e ajustar regex nao basta para entregar um curriculo mais pronto para recrutadores humanos.
+
+Decisao:
+Manter o score deterministico como fonte de verdade e adicionar uma camada opcional de IA para reescrita estruturada, com guardrails para nao inventar fatos, rodando em loop ate atingir a meta de corte ou ate os ganhos seguros se esgotarem.
+
+Motivo:
+Combina auditabilidade, controle de risco e uma reescrita muito mais contextual, alem de mostrar com clareza o que subiu, o que caiu e se ainda faz sentido insistir na vaga.

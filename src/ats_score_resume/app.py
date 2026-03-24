@@ -2,13 +2,24 @@ from __future__ import annotations
 
 import html
 import math
+import os
 import re
 
 import streamlit as st
 
+from ats_score_resume.ai_optimizer import AIOptimizationError, OpenAIResumeOptimizer
 from ats_score_resume.document_parser import ExtractedDocument, UnsupportedFileTypeError, extract_document
 from ats_score_resume.exporters import build_docx_resume, build_html_resume
 from ats_score_resume.job_source import JobInput, JobSourceError, resolve_job_input
+from ats_score_resume.optimizer import (
+    OptimizationOutcome,
+    ScoreTarget,
+    analyze_resume_text,
+    compare_analysis_results,
+    default_score_target,
+    optimize_resume_draft,
+    target_reached,
+)
 from ats_score_resume.scoring import AnalysisResult, Suggestion, analyze_document, display_section_name, generate_resume_draft
 
 TERM_STYLE_MAP = {
@@ -42,28 +53,30 @@ def main() -> None:
     inject_styles()
 
     st.title("ATS Score Resume")
-    st.caption("Analise currículos com score explicável de prontidão para ATS e aderência a vagas.")
+    st.caption("Analise curriculos com score explicavel, meta de corte e otimizacao hibrida com IA.")
 
     with st.sidebar:
         st.subheader("Como o score funciona")
         st.markdown(
             "\n".join(
                 [
-                    "- `Base ATS`: leitura pelo ATS, estrutura e força do conteúdo.",
-                    "- `Aderência à vaga`: palavras-chave, requisitos e alinhamento com a oportunidade.",
-                    "- `Overall`: média ponderada quando a vaga é informada.",
+                    "- `Base ATS`: leitura pelo ATS, estrutura e forca do conteudo.",
+                    "- `Aderencia a vaga`: palavras-chave, requisitos e alinhamento com a oportunidade.",
+                    "- `Overall`: media ponderada quando a vaga e informada.",
+                    "- `Meta de corte`: o app tenta chegar em uma nota forte antes de parar de otimizar.",
                 ]
             )
         )
+        render_ai_settings()
 
-    resume_file = st.file_uploader("Envie o currículo", type=["pdf", "docx", "txt", "md"])
+    resume_file = st.file_uploader("Envie o curriculo", type=["pdf", "docx", "txt", "md"])
     col1, col2 = st.columns(2)
 
     with col1:
         job_description = st.text_area(
-            "Descrição da vaga (opcional)",
+            "Descricao da vaga (opcional)",
             height=260,
-            placeholder="Cole aqui a descrição da vaga para calcular aderência.",
+            placeholder="Cole aqui a descricao da vaga para calcular aderencia.",
         )
 
     with col2:
@@ -71,14 +84,14 @@ def main() -> None:
             "URL da vaga (opcional)",
             placeholder="https://empresa.com/jobs/123",
         )
-        st.info("Se a URL não puder ser lida, você ainda pode colar a descrição manualmente.")
+        st.info("Se a URL nao puder ser lida, voce ainda pode colar a descricao manualmente.")
 
-    run_analysis = st.button("Analisar currículo", type="primary", use_container_width=True)
+    run_analysis = st.button("Analisar curriculo", type="primary", use_container_width=True)
     state_key = "latest_analysis"
 
     if run_analysis:
         if resume_file is None:
-            st.error("Envie um currículo para iniciar a análise.")
+            st.error("Envie um curriculo para iniciar a analise.")
             return
 
         try:
@@ -87,7 +100,7 @@ def main() -> None:
             st.error(str(exc))
             return
         except Exception as exc:  # pragma: no cover
-            st.error(f"Não foi possível ler o arquivo enviado: {exc}")
+            st.error(f"Nao foi possivel ler o arquivo enviado: {exc}")
             return
 
         job_input = None
@@ -118,41 +131,68 @@ def main() -> None:
         )
 
 
+def render_ai_settings() -> None:
+    st.subheader("IA opcional")
+    env_key = os.getenv("OPENAI_API_KEY", "")
+    env_model = os.getenv("OPENAI_MODEL", "gpt-5-mini")
+
+    if "openai_api_key" not in st.session_state:
+        st.session_state["openai_api_key"] = env_key
+    if "openai_model" not in st.session_state:
+        st.session_state["openai_model"] = env_model
+
+    st.text_input(
+        "OpenAI API key",
+        key="openai_api_key",
+        type="password",
+        help="Opcional. Se preencher, o app usa IA para reescrever o curriculo ate bater a meta ou esgotar ganhos seguros.",
+    )
+    st.text_input(
+        "Modelo de IA",
+        key="openai_model",
+        help="Padrao sugerido: gpt-5-mini.",
+    )
+    if st.session_state["openai_api_key"]:
+        st.success("IA habilitada para reescrita estruturada.")
+    else:
+        st.info("Sem chave, o app continua com score deterministico e rascunho heuristico.")
+
+
 def render_result(result: AnalysisResult, document: ExtractedDocument, job_input: JobInput | None = None) -> None:
-    st.success(f"Análise concluída para `{document.filename}`.")
+    st.success(f"Analise concluida para `{document.filename}`.")
 
     hero_col, metrics_col = st.columns((1.1, 1), gap="large")
     with hero_col:
         render_gauge("Overall Score", result.overall_score, score_status(result.overall_score))
     with metrics_col:
-        render_score_chip("Base ATS", result.resume.score, "Qualidade geral do currículo para leitura automatizada.")
+        render_score_chip("Base ATS", result.resume.score, "Qualidade geral do curriculo para leitura automatizada.")
         if result.job_match:
-            render_score_chip("Aderência à vaga", result.job_match.score, "Conexão entre o seu currículo e a oportunidade.")
-        render_score_chip("Nível atual", result.overall_score, summary_status_copy(result.overall_score))
+            render_score_chip("Aderencia a vaga", result.job_match.score, "Conexao entre o seu curriculo e a oportunidade.")
+        render_score_chip("Nivel atual", result.overall_score, summary_status_copy(result.overall_score))
 
-    st.subheader("Resumo da análise")
+    st.subheader("Resumo da analise")
     detected_sections = [display_section_name(section) for section in result.resume.detected_sections]
     missing_sections = [display_section_name(section) for section in result.resume.missing_sections]
     skill_heading = result.resume.section_headings.get("skills")
-    heading_note = f" Seção de skills reconhecida como: `{skill_heading}`." if skill_heading else ""
+    heading_note = f" Secao de skills reconhecida como: `{skill_heading}`." if skill_heading else ""
 
     st.markdown(
         "\n".join(
             [
-                f"- Seções detectadas: {', '.join(detected_sections) or 'nenhuma seção padrão detectada'}",
-                f"- Seções ausentes: {', '.join(missing_sections) or 'nenhuma'}",
+                f"- Secoes detectadas: {', '.join(detected_sections) or 'nenhuma secao padrao detectada'}",
+                f"- Secoes ausentes: {', '.join(missing_sections) or 'nenhuma'}",
                 f"- Skills detectadas: {', '.join(result.resume.keyword_terms[:8]) or 'nenhuma'}",
                 f"- Contato identificado: {', '.join(result.resume.contact_hits) or 'insuficiente'}." + heading_note,
             ]
         )
     )
 
-    st.subheader("Sugestões para aumentar o score")
+    st.subheader("Sugestoes para aumentar o score")
     if result.suggestions:
         for suggestion in result.suggestions:
             render_suggestion_card(suggestion)
     else:
-        st.markdown("<div class='info-card'>Nenhuma sugestão crítica encontrada.</div>", unsafe_allow_html=True)
+        st.markdown("<div class='info-card'>Nenhuma sugestao critica encontrada.</div>", unsafe_allow_html=True)
 
     st.subheader("Como o score foi montado")
     render_breakdown_cards(result.resume.metrics, build_resume_gap_map(result))
@@ -177,14 +217,22 @@ def render_result(result: AnalysisResult, document: ExtractedDocument, job_input
     if result.job_match:
         render_personalization_section(result, draft_key, job_input)
 
-    st.subheader("Currículo otimizado")
-    with st.expander("Rascunho editável", expanded=True):
+    current_draft = st.session_state[draft_key]
+    draft_result = analyze_resume_text(document.filename, current_draft, job_input)
+    target = default_score_target(job_input)
+    render_optimization_section(result, document, job_input, draft_key, draft_result, target)
+
+    st.subheader("Curriculo otimizado")
+    with st.expander("Rascunho editavel", expanded=True):
         edited_resume = st.text_area(
             "Rascunho gerado",
             key=draft_key,
             height=420,
         )
-        st.caption("Revise o texto antes de enviar. Mantenha apenas experiências e skills que sejam verdadeiras.")
+        st.caption("Revise o texto antes de enviar. Mantenha apenas experiencias e skills que sejam verdadeiras.")
+
+        latest_draft_result = analyze_resume_text(document.filename, edited_resume, job_input)
+        render_inline_score_summary(latest_draft_result, target)
 
         review_key = build_state_key(document.filename, result.overall_score, "reviewed")
         reviewed = st.checkbox(
@@ -195,14 +243,173 @@ def render_result(result: AnalysisResult, document: ExtractedDocument, job_input
         if reviewed:
             render_download_options(document.filename, edited_resume)
         else:
-            st.info("Depois de revisar o texto, marque a caixa acima para liberar a geração do arquivo final.")
+            st.info("Depois de revisar o texto, marque a caixa acima para liberar a geracao do arquivo final.")
+
+
+def render_optimization_section(
+    baseline_result: AnalysisResult,
+    document: ExtractedDocument,
+    job_input: JobInput | None,
+    draft_key: str,
+    draft_result: AnalysisResult,
+    target: ScoreTarget,
+) -> None:
+    st.subheader("Otimizacao inteligente")
+    st.markdown(
+        "A meta padrao e manter o curriculo forte para ATS e bom o bastante para a vaga. "
+        "A IA so entra para reescrever com mais contexto, sem inventar fatos, e para quando a meta for atingida ou quando novos ganhos deixarem de compensar."
+    )
+
+    render_target_summary(draft_result, target)
+
+    optimization_key = f"{draft_key}_optimization"
+    outcome = st.session_state.get(optimization_key)
+
+    manual_title = st.session_state.get(f"{draft_key}_manual_title", "").strip() or None
+    selected_terms = st.session_state.get(f"{draft_key}_selected_terms", [])
+    apply_title = bool(st.session_state.get(f"{draft_key}_apply_title", False))
+
+    disabled = target_reached(draft_result, target)
+    if st.button("Otimizar com IA ate atingir a meta", key=f"{draft_key}_optimize_button", use_container_width=True, disabled=disabled):
+        try:
+            optimizer = build_ai_optimizer()
+            outcome = optimize_resume_draft(
+                filename=document.filename,
+                original_document=document,
+                baseline_result=baseline_result,
+                initial_draft=st.session_state[draft_key],
+                job_input=job_input,
+                ai_optimizer=optimizer,
+                target=target,
+                confirmed_terms=selected_terms,
+                confirmed_title=manual_title if apply_title else None,
+            )
+        except AIOptimizationError as exc:
+            st.error(f"Nao foi possivel concluir a reescrita com IA: {exc}")
+            return
+        except Exception as exc:  # pragma: no cover
+            st.error(f"Falha ao rodar a otimizacao com IA: {exc}")
+            return
+
+        st.session_state[draft_key] = outcome.final_draft
+        st.session_state[optimization_key] = outcome
+        st.toast("Otimizacao concluida.")
+        st.rerun()
+
+    if disabled:
+        st.success("O rascunho atual ja bateu a meta de corte configurada.")
+    elif not st.session_state.get("openai_api_key", "").strip():
+        st.info("Preencha a chave da OpenAI na lateral para ativar a reescrita automatica ate a meta.")
+
+    if outcome:
+        render_optimization_outcome(outcome)
+
+
+def render_target_summary(draft_result: AnalysisResult, target: ScoreTarget) -> None:
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        render_target_card("Base ATS", draft_result.resume.score, target.ats_score)
+    with col2:
+        render_target_card("Overall", draft_result.overall_score, target.overall_score)
+    with col3:
+        if target.job_match_score is None:
+            st.markdown("<div class='info-card'>Sem vaga informada, a meta vale apenas para ATS e score geral.</div>", unsafe_allow_html=True)
+        else:
+            current_job_score = draft_result.job_match.score if draft_result.job_match else 0
+            render_target_card("Aderencia", current_job_score, target.job_match_score)
+
+
+def render_target_card(label: str, current: int, target: int) -> None:
+    helper = "Meta atingida." if current >= target else f"Meta: {target}/100"
+    render_score_chip(label, current, helper)
+
+
+def render_inline_score_summary(result: AnalysisResult, target: ScoreTarget) -> None:
+    status = "Meta atingida" if target_reached(result, target) else "Abaixo da meta"
+    st.caption(
+        f"Rascunho atual: ATS {result.resume.score}/100, Overall {result.overall_score}/100, "
+        f"Status: {status}."
+    )
+
+
+def render_optimization_outcome(outcome: OptimizationOutcome) -> None:
+    if outcome.reached_target:
+        st.success(outcome.stop_reason)
+    else:
+        st.warning(outcome.stop_reason)
+
+    summary_col, verdict_col = st.columns((1.4, 1))
+    with summary_col:
+        render_score_chip(
+            "Antes da otimizacao",
+            outcome.starting_result.overall_score,
+            f"ATS {outcome.starting_result.resume.score}/100",
+        )
+        render_score_chip(
+            "Depois da otimizacao",
+            outcome.final_result.overall_score,
+            f"ATS {outcome.final_result.resume.score}/100",
+        )
+    with verdict_col:
+        if outcome.continue_with_job is None:
+            st.markdown("<div class='info-card'>Sem vaga informada, a meta vale apenas para prontidao ATS.</div>", unsafe_allow_html=True)
+        elif outcome.continue_with_job:
+            st.markdown("<div class='info-card'>Vale seguir com esta vaga: a aderencia ficou forte o bastante para uma candidatura consciente.</div>", unsafe_allow_html=True)
+        else:
+            st.markdown("<div class='info-card'>A vaga ainda parece exigente para o seu perfil atual. Vale decidir se compensa adaptar mais ou priorizar outra oportunidade.</div>", unsafe_allow_html=True)
+
+    improved, declined = compare_analysis_results(outcome.starting_result, outcome.final_result)
+    render_change_lists(improved, declined)
+
+    if outcome.steps:
+        st.markdown("**Rodadas da IA**")
+        for step in outcome.steps:
+            with st.expander(f"Rodada {step.iteration}"):
+                st.markdown(f"- Resumo da rodada: {step.summary}")
+                if step.applied_changes:
+                    st.markdown("- Mudancas aplicadas:")
+                    for item in step.applied_changes:
+                        st.markdown(f"  - {item}")
+                if step.retained_job_terms:
+                    st.markdown(f"- Termos da vaga aproveitados: {', '.join(step.retained_job_terms)}")
+                if step.rejected_job_terms:
+                    st.markdown(f"- Termos rejeitados por falta de evidencia: {', '.join(step.rejected_job_terms)}")
+                if step.confidence_notes:
+                    for note in step.confidence_notes:
+                        st.markdown(f"- Observacao: {note}")
+
+
+def render_change_lists(improved: list, declined: list) -> None:
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**O que aumentou a nota**")
+        if improved:
+            for change in improved[:8]:
+                st.markdown(f"- {change.label}: +{change.delta} ponto(s) ({change.before} -> {change.after})")
+        else:
+            st.markdown("- Nenhum ganho relevante registrado.")
+    with col2:
+        st.markdown("**O que reduziu a nota**")
+        if declined:
+            for change in declined[:6]:
+                st.markdown(f"- {change.label}: {change.delta} ponto(s) ({change.before} -> {change.after})")
+        else:
+            st.markdown("- Nenhuma queda relevante registrada.")
+
+
+def build_ai_optimizer() -> OpenAIResumeOptimizer | None:
+    api_key = st.session_state.get("openai_api_key", "").strip()
+    if not api_key:
+        return None
+    model = st.session_state.get("openai_model", "gpt-5-mini").strip() or "gpt-5-mini"
+    return OpenAIResumeOptimizer(api_key=api_key, model=model)
 
 
 def render_personalization_section(result: AnalysisResult, draft_key: str, job_input: JobInput | None) -> None:
-    st.subheader("Personalização da vaga")
+    st.subheader("Personalizacao da vaga")
     st.markdown(
-        "Essa área serve para adaptar o currículo antes da geração final. "
-        "O título sugerido funciona melhor no topo do currículo, perto do cabeçalho, e os termos confirmados entram na seção de skills."
+        "Essa area serve para adaptar o curriculo antes da geracao final. "
+        "O titulo sugerido funciona melhor no topo do curriculo, perto do cabecalho, e os termos confirmados entram na secao de skills."
     )
 
     suggested_terms = personalization_terms(result)
@@ -215,38 +422,40 @@ def render_personalization_section(result: AnalysisResult, draft_key: str, job_i
         st.session_state[manual_title_key] = default_title
 
     if inferred_title:
-        st.markdown(f"- Título sugerido para o topo do currículo: `{inferred_title}`")
+        st.markdown(f"- Titulo sugerido para o topo do curriculo: `{inferred_title}`")
     else:
-        st.warning("Não conseguimos identificar o título da vaga com segurança. Preencha manualmente abaixo.")
+        st.warning("Nao conseguimos identificar o titulo da vaga com seguranca. Preencha manualmente abaixo.")
 
     manual_title = st.text_input(
-        "Título da vaga para usar no topo do currículo",
+        "Titulo da vaga para usar no topo do curriculo",
         key=manual_title_key,
-        placeholder="Ex.: Engenharia de Dados AWS Sênior",
+        placeholder="Ex.: Engenharia de Dados AWS Senior",
     ).strip()
 
-    apply_title = st.checkbox(
-        "Adicionar o título sugerido no topo do currículo",
+    st.checkbox(
+        "Adicionar o titulo sugerido no topo do curriculo",
         key=f"{draft_key}_apply_title",
         value=bool(default_title),
         disabled=not bool(manual_title),
     )
 
-    selected_terms = st.multiselect(
-        "Selecione apenas as skills/termos que você realmente domina para adicionar na seção Skills",
+    st.multiselect(
+        "Selecione apenas as skills/termos que voce realmente domina para adicionar na secao Skills",
         options=suggested_terms,
         default=suggested_terms[: min(6, len(suggested_terms))],
         key=f"{draft_key}_selected_terms",
     )
 
-    if st.button("Aplicar personalização ao rascunho", key=f"{draft_key}_apply_button", use_container_width=True):
+    if st.button("Aplicar personalizacao ao rascunho", key=f"{draft_key}_apply_button", use_container_width=True):
+        selected_terms = st.session_state.get(f"{draft_key}_selected_terms", [])
+        apply_title = bool(st.session_state.get(f"{draft_key}_apply_title", False))
         updated_draft = apply_personalization_to_draft(
             st.session_state[draft_key],
             manual_title if apply_title else None,
             selected_terms,
         )
         st.session_state[draft_key] = updated_draft
-        st.toast("Personalização aplicada ao rascunho.")
+        st.toast("Personalizacao aplicada ao rascunho.")
         st.rerun()
 
 
@@ -622,21 +831,23 @@ def build_resume_gap_map(result: AnalysisResult) -> dict[str, list[str]]:
     if result.resume.format_risks:
         gaps["parsing_format"].extend(result.resume.format_risks)
     if result.resume.missing_sections:
-        gaps["parsing_format"].append(
-            "Padronizar os headings principais ajuda a leitura do ATS."
-        )
+        gaps["parsing_format"].append("Padronizar os headings principais ajuda a leitura do ATS.")
 
-    required_contacts = {"email": "Adicionar e-mail.", "telefone": "Adicionar telefone.", "localizacao": "Adicionar localização."}
+    required_contacts = {
+        "email": "Adicionar e-mail.",
+        "telefone": "Adicionar telefone.",
+        "localizacao": "Adicionar localizacao.",
+    }
     for key, message in required_contacts.items():
         if key not in result.resume.contact_hits:
             gaps["completeness"].append(message)
     for section in result.resume.missing_sections:
-        gaps["completeness"].append(f"Incluir a seção {display_section_name(section)}.")
+        gaps["completeness"].append(f"Incluir a secao {display_section_name(section)}.")
 
     if result.resume.quantified_achievement_count < 2:
-        gaps["content_quality"].append("Adicionar mais resultados com números ou percentuais.")
+        gaps["content_quality"].append("Adicionar mais resultados com numeros ou percentuais.")
     if result.resume.action_bullet_count < 3:
-        gaps["content_quality"].append("Usar mais bullets iniciando com verbos de ação.")
+        gaps["content_quality"].append("Usar mais bullets iniciando com verbos de acao.")
     if len(result.resume.keyword_terms) < 8:
         gaps["content_quality"].append("Expandir a densidade de hard skills relevantes.")
 
@@ -648,7 +859,7 @@ def build_job_gap_map(result: AnalysisResult) -> dict[str, list[str]]:
         return {}
 
     gaps: dict[str, list[str]] = {
-        "keyword_coverage": [f"Incluir ou reforçar: {term}" for term in result.job_match.missing_keywords[:10]],
+        "keyword_coverage": [f"Incluir ou reforcar: {term}" for term in result.job_match.missing_keywords[:10]],
         "required_terms": [f"Comprovar requisito: {term}" for term in result.job_match.missing_required_terms[:10]],
         "title_alignment": [],
         "evidence_alignment": [],
@@ -656,11 +867,11 @@ def build_job_gap_map(result: AnalysisResult) -> dict[str, list[str]]:
     }
 
     if not result.job_match.job_title:
-        gaps["title_alignment"].append("Preencher manualmente o título da vaga para melhorar o alinhamento.")
+        gaps["title_alignment"].append("Preencher manualmente o titulo da vaga para melhorar o alinhamento.")
     else:
-        gaps["title_alignment"].append(f"Confirmar se o título alvo deve ser: {result.job_match.job_title}.")
+        gaps["title_alignment"].append(f"Confirmar se o titulo alvo deve ser: {result.job_match.job_title}.")
     if result.job_match.missing_required_terms:
-        gaps["evidence_alignment"].append("Mover requisitos confirmados para experiência, resumo ou skills.")
+        gaps["evidence_alignment"].append("Mover requisitos confirmados para experiencia, resumo ou skills.")
     if result.job_match.missing_keywords:
         gaps["terminology_fidelity"].append("Usar a mesma grafia da vaga para ferramentas e tecnologias principais.")
 
@@ -671,8 +882,8 @@ def summarize_missing_items(items: list[str]) -> str:
     if not items:
         return ""
     if len(items) == 1:
-        return "Ver 1 ponto de atenção"
-    return f"Ver {len(items)} pontos de atenção"
+        return "Ver 1 ponto de atencao"
+    return f"Ver {len(items)} pontos de atencao"
 
 
 def score_color(score: int) -> str:
@@ -688,15 +899,15 @@ def score_status(score: int) -> str:
         return "Muito forte"
     if score >= 60:
         return "Bom potencial"
-    return "Precisa de reforço"
+    return "Precisa de reforco"
 
 
 def summary_status_copy(score: int) -> str:
     if score >= 80:
-        return "Seu currículo já está competitivo e com boa leitura automatizada."
+        return "Seu curriculo ja esta competitivo e com boa leitura automatizada."
     if score >= 60:
-        return "Há uma base boa, com espaço claro para subir o score."
-    return "Vale ajustar estrutura e conteúdo antes de usar em processos seletivos."
+        return "Ha uma base boa, com espaco claro para subir o score."
+    return "Vale ajustar estrutura e conteudo antes de usar em processos seletivos."
 
 
 def build_generated_filename(filename: str, extension: str) -> str:

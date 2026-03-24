@@ -13,6 +13,8 @@ Aplicacao local para analisar curriculos com foco em compatibilidade com ATS, ge
 7. Permite validar o rascunho e baixar o curriculo final em `TXT`, `MD`, `DOCX` ou `HTML`.
 8. Calcula um `Job Match Score` quando a vaga e informada.
 9. Explica o breakdown do score por criterio.
+10. Define uma meta de corte para ATS e, opcionalmente, usa IA para reescrever o curriculo ate atingir a meta ou esgotar ganhos seguros.
+11. Mostra o que aumentou e o que diminuiu a nota depois da otimizacao.
 
 ## Stack
 
@@ -20,6 +22,7 @@ Aplicacao local para analisar curriculos com foco em compatibilidade com ATS, ge
 - `Streamlit` para interface
 - `PyPDF` e `python-docx` para extracao de texto
 - `requests` e `BeautifulSoup` para leitura opcional de URL de vaga
+- `OpenAI Responses API` opcional para reescrita estruturada com IA
 
 ## Como executar
 
@@ -29,6 +32,25 @@ python -m streamlit run app.py
 ```
 
 Depois disso, abra a URL local mostrada pelo Streamlit no navegador.
+
+## IA opcional
+
+Se quiser ativar a reescrita automatica com IA, defina a chave antes de abrir o app:
+
+```bash
+set OPENAI_API_KEY=sua-chave
+set OPENAI_MODEL=gpt-5-mini
+python -m streamlit run app.py
+```
+
+Tambem e possivel preencher a chave diretamente na barra lateral do Streamlit.
+
+## Como funciona a meta de corte
+
+- Sem vaga informada: a meta padrao mira um `Base ATS` forte.
+- Com vaga informada: o app busca uma combinacao de `Base ATS`, `Overall` e `Aderencia a vaga`.
+- A IA para quando a meta e atingida ou quando uma nova rodada deixa de trazer ganho seguro.
+- O resultado mostra explicitamente o que subiu e o que caiu na nota para ajudar a decidir se ainda vale insistir na vaga.
 
 ## Como testar
 
