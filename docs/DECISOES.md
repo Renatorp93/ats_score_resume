@@ -191,3 +191,14 @@ Adicionar uma comparacao lado a lado entre o curriculo original e o otimizado, c
 
 Motivo:
 Deixa a revisao mais segura, acelera a aprovacao humana e reduz o risco de exportar um texto que melhorou a nota, mas perdeu fidelidade.
+
+### D018 - Exigir aprovacao explicita das mudancas heuristicas
+
+Contexto:
+Sem IA e sem aprovacao humana, o rascunho heuristico ainda podia introduzir reescritas pouco naturais ou simplificacoes excessivas.
+
+Decisao:
+Separar o rascunho proposto do rascunho final e aplicar ao documento editavel apenas as secoes aprovadas pelo usuario.
+
+Motivo:
+Mantem o usuario no controle, reduz risco de aceitar texto mecanico e aproxima o produto de um fluxo real de revisao antes do envio para recrutadores.

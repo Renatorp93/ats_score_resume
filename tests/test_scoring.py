@@ -179,6 +179,30 @@ Python, SQL, AWS, Terraform
     assert generated_result.action_bullet_count >= 2
 
 
+def test_generated_resume_preserves_unmatched_sentences_without_generic_prefix() -> None:
+    document = make_document(
+        "resume.txt",
+        ".txt",
+        """
+Ana Souza
+ana@example.com
+
+Experiencia
+2021 - 2025
+A nova arquitetura reduziu em 90% o tempo de processamento de pipelines criticos.
+
+Educacao
+Bacharelado em Estatistica
+""",
+    )
+
+    result = analyze_document(document)
+    generated_resume = generate_resume_draft(document, result)
+
+    assert "- A nova arquitetura reduziu em 90% o tempo de processamento de pipelines criticos." in generated_resume
+    assert "Atuou com A nova arquitetura" not in generated_resume
+
+
 def test_competencias_tecnicas_is_detected_as_skills_section() -> None:
     document = make_document(
         "resume.txt",

@@ -1,4 +1,4 @@
-from ats_score_resume.comparison import compare_resume_versions
+from ats_score_resume.comparison import build_approved_resume_text, compare_resume_versions
 
 
 def test_compare_resume_versions_highlights_changed_sections() -> None:
@@ -66,3 +66,36 @@ Senior Data Engineer
     header = next(section for section in comparison.sections if section.key == "header")
 
     assert "Senior Data Engineer" in header.added_lines
+
+
+def test_build_approved_resume_text_only_applies_selected_sections() -> None:
+    original = """
+Renato Rocha
+renato@example.com
+
+Resumo
+Profissional com experiencia em dados.
+
+Experiencia
+- Responsavel por dashboards.
+""".strip()
+
+    proposed = """
+RENATO ROCHA
+renato@example.com
+
+RESUMO PROFISSIONAL
+Profissional com experiencia em dados, analytics e automacao.
+
+SKILLS
+Python, SQL, Power BI
+
+EXPERIENCIA PROFISSIONAL
+- Desenvolveu dashboards para 12 areas e reduziu o tempo de reporte em 40%.
+""".strip()
+
+    approved = build_approved_resume_text(original, proposed, ["skills"])
+
+    assert "Python, SQL, Power BI" in approved
+    assert "Profissional com experiencia em dados." in approved
+    assert "Desenvolveu dashboards" not in approved

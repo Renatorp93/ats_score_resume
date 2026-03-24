@@ -577,9 +577,6 @@ def rewrite_as_action_bullet(line: str) -> str:
                 return f"{replacement}{lowercase_sentence_start(remainder)}".strip()
             return replacement.strip()
 
-    if len(clean_line.split()) >= 6:
-        return f"Atuou com {lowercase_sentence_start(clean_line)}"
-
     return clean_line
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import hashlib
 import math
 import os
 import re
@@ -8,7 +9,7 @@ import re
 import streamlit as st
 
 from ats_score_resume.ai_optimizer import AIOptimizationError, OpenAIResumeOptimizer
-from ats_score_resume.comparison import ResumeComparison, compare_resume_versions
+from ats_score_resume.comparison import ResumeComparison, build_approved_resume_text, compare_resume_versions
 from ats_score_resume.document_parser import ExtractedDocument, UnsupportedFileTypeError, extract_document
 from ats_score_resume.exporters import build_docx_resume, build_html_resume
 from ats_score_resume.job_source import JobInput, JobSourceError, resolve_job_input
@@ -213,7 +214,9 @@ def render_result(result: AnalysisResult, document: ExtractedDocument, job_input
         )
 
     draft_key = build_state_key(document.filename, result.overall_score, "draft")
+    approved_key = build_state_key(document.filename, result.overall_score, "approved_draft")
     ensure_draft_state(draft_key, document, result)
+    ensure_approved_draft_state(approved_key, document)
 
     if result.job_match:
         render_personalization_section(result, draft_key, job_input)
@@ -223,11 +226,14 @@ def render_result(result: AnalysisResult, document: ExtractedDocument, job_input
     target = default_score_target(job_input)
     render_optimization_section(result, document, job_input, draft_key, draft_result, target)
 
-    st.subheader("Curriculo otimizado")
+    comparison = compare_resume_versions(document.cleaned_text, st.session_state[draft_key])
+    render_approval_section(comparison, document.cleaned_text, st.session_state[draft_key], approved_key)
+
+    st.subheader("Curriculo aprovado para edicao")
     with st.expander("Rascunho editavel", expanded=True):
         edited_resume = st.text_area(
-            "Rascunho gerado",
-            key=draft_key,
+            "Rascunho final aprovado",
+            key=approved_key,
             height=420,
         )
         st.caption("Revise o texto antes de enviar. Mantenha apenas experiencias e skills que sejam verdadeiras.")
@@ -246,7 +252,6 @@ def render_result(result: AnalysisResult, document: ExtractedDocument, job_input
         else:
             st.info("Depois de revisar o texto, marque a caixa acima para liberar a geracao do arquivo final.")
 
-    comparison = compare_resume_versions(document.cleaned_text, st.session_state[draft_key])
     render_resume_comparison(comparison, document.cleaned_text, st.session_state[draft_key])
 
 
@@ -381,6 +386,44 @@ def render_optimization_outcome(outcome: OptimizationOutcome) -> None:
                 if step.confidence_notes:
                     for note in step.confidence_notes:
                         st.markdown(f"- Observacao: {note}")
+
+
+def render_approval_section(
+    comparison: ResumeComparison,
+    original_text: str,
+    proposed_text: str,
+    approved_key: str,
+) -> None:
+    st.subheader("Aprovacao das modificacoes")
+    st.markdown(
+        "As sugestoes abaixo ainda nao entram automaticamente no curriculo final. "
+        "Marque apenas as secoes que voce aprova para compor o rascunho editavel."
+    )
+
+    proposal_signature = hashlib.md5(proposed_text.encode("utf-8")).hexdigest()[:10]
+    changed_sections = [section for section in comparison.sections if section.added_lines or section.removed_lines]
+
+    if not changed_sections:
+        st.info("Nao ha mudancas pendentes para aprovar neste momento.")
+        return
+
+    for section in changed_sections:
+        checkbox_key = f"{approved_key}_{proposal_signature}_{section.key}_approved"
+        label = (
+            f"Aprovar {section.label} "
+            f"(+{len(section.added_lines)} / -{len(section.removed_lines)}, {section.similarity_ratio}% parecido)"
+        )
+        st.checkbox(label, key=checkbox_key, value=False)
+
+    if st.button("Aplicar secoes aprovadas ao rascunho final", key=f"{approved_key}_apply_approved", use_container_width=True):
+        approved_keys = [
+            section.key
+            for section in changed_sections
+            if st.session_state.get(f"{approved_key}_{proposal_signature}_{section.key}_approved")
+        ]
+        st.session_state[approved_key] = build_approved_resume_text(original_text, proposed_text, approved_keys)
+        st.toast("Rascunho final atualizado com as secoes aprovadas.")
+        st.rerun()
 
 
 def render_resume_comparison(comparison: ResumeComparison, original_text: str, optimized_text: str) -> None:
@@ -560,6 +603,11 @@ def render_download_options(filename: str, resume_text: str) -> None:
 def ensure_draft_state(draft_key: str, document: ExtractedDocument, result: AnalysisResult) -> None:
     if draft_key not in st.session_state:
         st.session_state[draft_key] = generate_resume_draft(document, result)
+
+
+def ensure_approved_draft_state(approved_key: str, document: ExtractedDocument) -> None:
+    if approved_key not in st.session_state:
+        st.session_state[approved_key] = document.cleaned_text
 
 
 def personalization_terms(result: AnalysisResult) -> list[str]:

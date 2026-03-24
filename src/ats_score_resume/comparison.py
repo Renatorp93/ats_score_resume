@@ -19,6 +19,14 @@ class SectionComparison:
 
 
 @dataclass(slots=True)
+class ResumeSection:
+    key: str
+    label: str
+    heading: str | None
+    lines: list[str]
+
+
+@dataclass(slots=True)
 class ResumeComparison:
     sections: list[SectionComparison]
     added_line_count: int
@@ -27,8 +35,8 @@ class ResumeComparison:
 
 
 def compare_resume_versions(original_text: str, optimized_text: str) -> ResumeComparison:
-    original_sections = extract_resume_sections_for_comparison(original_text)
-    optimized_sections = extract_resume_sections_for_comparison(optimized_text)
+    original_sections = {section.key: section.lines for section in extract_resume_sections_for_comparison(original_text)}
+    optimized_sections = {section.key: section.lines for section in extract_resume_sections_for_comparison(optimized_text)}
 
     section_order = ordered_keys(original_sections, optimized_sections)
     comparisons: list[SectionComparison] = []
@@ -66,19 +74,72 @@ def compare_resume_versions(original_text: str, optimized_text: str) -> ResumeCo
     )
 
 
-def extract_resume_sections_for_comparison(text: str) -> dict[str, list[str]]:
-    sections: dict[str, list[str]] = {}
+def extract_resume_sections_for_comparison(text: str) -> list[ResumeSection]:
+    sections: list[ResumeSection] = []
     current_key = "header"
+    current_heading: str | None = None
+    current_lines: list[str] = []
 
     for line in split_nonempty_lines(text):
-        section_key = identify_section(line)
+        section_key = detect_comparison_heading(line)
         if section_key:
+            if current_heading is not None or current_lines:
+                sections.append(
+                    ResumeSection(
+                        key=current_key,
+                        label=display_section_name(current_key) if current_key != "header" else "Cabecalho",
+                        heading=current_heading,
+                        lines=current_lines,
+                    )
+                )
             current_key = section_key
-            sections.setdefault(section_key, [])
+            current_heading = line.strip()
+            current_lines = []
             continue
-        sections.setdefault(current_key, []).append(line)
+        current_lines.append(line)
 
-    return {key: value for key, value in sections.items() if value}
+    if current_heading is not None or current_lines:
+        sections.append(
+            ResumeSection(
+                key=current_key,
+                label=display_section_name(current_key) if current_key != "header" else "Cabecalho",
+                heading=current_heading,
+                lines=current_lines,
+            )
+        )
+
+    return [section for section in sections if section.lines]
+
+
+def build_approved_resume_text(original_text: str, proposed_text: str, approved_keys: list[str]) -> str:
+    original_sections = {section.key: section for section in extract_resume_sections_for_comparison(original_text)}
+    proposed_sections = {section.key: section for section in extract_resume_sections_for_comparison(proposed_text)}
+    ordered = ordered_keys(
+        {section.key: section.lines for section in original_sections.values()},
+        {section.key: section.lines for section in proposed_sections.values()},
+    )
+
+    blocks: list[str] = []
+    for key in ordered:
+        if key in approved_keys and key in proposed_sections:
+            section = proposed_sections[key]
+        elif key in original_sections:
+            section = original_sections[key]
+        elif key in proposed_sections:
+            section = proposed_sections[key]
+        else:
+            continue
+
+        if section.key == "header":
+            block = "\n".join(section.lines).strip()
+        else:
+            heading = section.heading or section.label.upper()
+            body = "\n".join(section.lines).strip()
+            block = heading if not body else f"{heading}\n{body}"
+        if block.strip():
+            blocks.append(block.strip())
+
+    return "\n\n".join(blocks).strip()
 
 
 def ordered_keys(left: dict[str, list[str]], right: dict[str, list[str]]) -> list[str]:
@@ -88,6 +149,13 @@ def ordered_keys(left: dict[str, list[str]], right: dict[str, list[str]]) -> lis
             if key not in ordered:
                 ordered.append(key)
     return ordered
+
+
+def detect_comparison_heading(line: str) -> str | None:
+    trimmed = line.strip()
+    if trimmed.endswith(".") or len(trimmed.split()) > 4:
+        return None
+    return identify_section(trimmed)
 
 
 def similarity_percentage(left: list[str], right: list[str]) -> int:
