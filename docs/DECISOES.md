@@ -48,3 +48,47 @@ Seguir com `Python 3.12` e uma interface web leve.
 
 Motivo:
 Acelera o MVP, simplifica parsing de arquivos e deixa espaco para evolucao posterior para API ou frontend dedicado.
+
+### D005 - Usar Streamlit como interface do MVP
+
+Contexto:
+Era necessario escolher rapidamente uma forma de expor upload de arquivo, score e sugestoes.
+
+Decisao:
+Usar `Streamlit` na primeira versao da aplicacao.
+
+Motivo:
+Entrega uma interface local funcional com pouco codigo de infraestrutura e deixa o foco no motor de analise.
+
+### D006 - Suportar `PDF`, `DOCX`, `TXT` e `MD` no MVP
+
+Contexto:
+O produto precisa ler curriculos reais, mas tambem ser facil de testar.
+
+Decisao:
+Aceitar `PDF` e `DOCX` como formatos principais e `TXT`/`MD` como formatos auxiliares para testes e depuracao.
+
+Motivo:
+Equilibra realismo de uso com simplicidade para desenvolvimento e testes.
+
+### D007 - Fazer o score com heuristicas deterministicas e nao com modelo generativo
+
+Contexto:
+O usuario pediu metricas explicitas e um arquivo com os criterios utilizados.
+
+Decisao:
+Implementar o score com regras e pesos fixos, deixando LLM fora do calculo principal.
+
+Motivo:
+Mantem o resultado auditavel, reproduzivel e facil de explicar.
+
+### D008 - Criar um `app.py` raiz para facilitar a execucao do Streamlit
+
+Contexto:
+Projetos com layout `src/` nem sempre resolvem imports automaticamente quando o Streamlit executa o script dentro do pacote.
+
+Decisao:
+Adicionar um arquivo `app.py` na raiz que injeta `src/` no `sys.path` e delega para a aplicacao principal.
+
+Motivo:
+Simplifica a experiencia de execucao com `streamlit run app.py` e reduz atrito para quem clonar o repositorio.

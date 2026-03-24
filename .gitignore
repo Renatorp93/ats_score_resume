@@ -1,0 +1,11 @@
+.pytest_cache/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.streamlit/
+dist/
+build/
+*.egg-info/
+pytest-cache-files-*/
