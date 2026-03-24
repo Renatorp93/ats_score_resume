@@ -158,3 +158,14 @@ Atualizar a personalizacao para operar por secoes do documento, preservando head
 
 Motivo:
 O curriculo precisa continuar legivel para recrutadores humanos, nao apenas para ATS.
+
+### D015 - Reescrever bullets genericos e filtrar ruido de job boards
+
+Contexto:
+O rascunho otimizado ainda podia sair com frases nominais demais, e algumas paginas de vaga traziam termos ruidosos como `brazil`, `jobs` e `ago` para dentro do score.
+
+Decisao:
+Passar a converter descricoes comuns em bullets com verbos de acao, formatar skills sugeridas com grafia tecnica mais natural e excluir termos de navegacao/job board da extracao de keywords.
+
+Motivo:
+Melhora a leitura humana do curriculo gerado e evita que o score reaja a ruido que nao representa requisito real da vaga.

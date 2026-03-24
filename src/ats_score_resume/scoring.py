@@ -88,6 +88,22 @@ NOISE_JOB_TITLE_LINES = {
     "sign in",
 }
 
+ACTION_BULLET_REWRITES = (
+    (re.compile(r"^desenvolvimento\s+de\s+", re.IGNORECASE), "Desenvolveu "),
+    (re.compile(r"^implementacao\s+de\s+", re.IGNORECASE), "Implementou "),
+    (re.compile(r"^criacao\s+de\s+", re.IGNORECASE), "Criou "),
+    (re.compile(r"^reestruturacao\s+de\s+", re.IGNORECASE), "Reestruturou "),
+    (re.compile(r"^integracao\s+de\s+", re.IGNORECASE), "Integrou "),
+    (re.compile(r"^automacao\s+de\s+", re.IGNORECASE), "Automatizou "),
+    (re.compile(r"^modernizacao\s+de\s+", re.IGNORECASE), "Modernizou "),
+    (re.compile(r"^migracao\s+de\s+", re.IGNORECASE), "Migrou "),
+    (re.compile(r"^atuacao\s+na\s+", re.IGNORECASE), "Atuou na "),
+    (re.compile(r"^atuacao\s+no\s+", re.IGNORECASE), "Atuou no "),
+    (re.compile(r"^atuacao\s+em\s+", re.IGNORECASE), "Atuou em "),
+    (re.compile(r"^suporte\s+a\s+", re.IGNORECASE), "Deu suporte a "),
+    (re.compile(r"^gestao\s+de\s+", re.IGNORECASE), "Gerenciou "),
+)
+
 DATE_PATTERN = re.compile(
     r"\b(?:"
     r"\d{4}"
@@ -506,13 +522,12 @@ def build_experience_block(experience_lines: list[str], result: AnalysisResult) 
         if looks_like_resume_heading(clean_line) or DATE_PATTERN.search(clean_line):
             formatted_lines.append(clean_line)
             continue
-        if clean_line.startswith(("-", "*")):
+        bullet_body = clean_line.lstrip("-* ").strip()
+        if len(bullet_body.split()) <= 5 and not clean_line.startswith(("-", "*")):
             formatted_lines.append(clean_line)
             continue
-        if line_starts_with_action_verb(clean_line):
-            formatted_lines.append(f"- {clean_line}")
-            continue
-        formatted_lines.append(clean_line if len(clean_line.split()) <= 5 else f"- {clean_line}")
+        bullet_text = rewrite_as_action_bullet(bullet_body)
+        formatted_lines.append(f"- {bullet_text}")
 
     if result.resume.quantified_achievement_count < 2:
         formatted_lines.append("- [Adicionar um bullet com impacto mensurável, usando número ou percentual real.]")
@@ -544,6 +559,40 @@ def collect_inline_items(lines: list[str]) -> list[str]:
             if clean_item and clean_item not in items:
                 items.append(clean_item)
     return items
+
+
+def rewrite_as_action_bullet(line: str) -> str:
+    clean_line = line.strip().rstrip(" -")
+    if not clean_line:
+        return clean_line
+    if line_starts_with_action_verb(clean_line):
+        return clean_line
+
+    normalized_line = normalize_for_matching(clean_line)
+    for pattern, replacement in ACTION_BULLET_REWRITES:
+        match = pattern.search(normalized_line)
+        if match:
+            remainder = clean_line[match.end() :].strip()
+            if remainder:
+                return f"{replacement}{lowercase_sentence_start(remainder)}".strip()
+            return replacement.strip()
+
+    if len(clean_line.split()) >= 6:
+        return f"Atuou com {lowercase_sentence_start(clean_line)}"
+
+    return clean_line
+
+
+def lowercase_sentence_start(value: str) -> str:
+    if not value:
+        return value
+
+    first_word, _, remainder = value.partition(" ")
+    if first_word.isupper() and len(first_word) <= 5:
+        return value
+    if len(first_word) >= 2 and first_word[1].isupper():
+        return value
+    return first_word[:1].lower() + first_word[1:] + (f" {remainder}" if remainder else "")
 
 
 def format_list_for_sentence(items: list[str]) -> str:

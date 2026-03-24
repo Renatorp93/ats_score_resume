@@ -77,6 +77,27 @@ COMMON_WORDS = {
     "worked",
 }
 
+JOB_BOARD_NOISE_TERMS = {
+    "ago",
+    "applicant",
+    "applicants",
+    "apply",
+    "brazil",
+    "brasil",
+    "engineer",
+    "hired",
+    "hiring",
+    "jobs",
+    "linkedin",
+    "month",
+    "months",
+    "promoted",
+    "role",
+    "save",
+    "search",
+    "shared",
+}
+
 SKILL_PHRASES = (
     "agile",
     "airflow",
@@ -166,6 +187,7 @@ SENIORITY_TERMS = ("estagio", "intern", "junior", "jr", "pleno", "mid", "senior"
 ACTION_VERBS = (
     "achieved",
     "analyzed",
+    "automated",
     "built",
     "coordinated",
     "created",
@@ -179,10 +201,14 @@ ACTION_VERBS = (
     "launched",
     "led",
     "managed",
+    "migrated",
     "optimized",
+    "restructured",
     "reduced",
     "resolved",
     "analisou",
+    "atuou",
+    "automatizou",
     "aumentou",
     "coordenou",
     "criou",
@@ -191,9 +217,13 @@ ACTION_VERBS = (
     "estruturou",
     "gerenciou",
     "implementou",
+    "integrou",
     "liderou",
     "melhorou",
+    "migrou",
+    "modernizou",
     "otimizou",
+    "reestruturou",
     "reduziu",
 )
 
@@ -245,7 +275,11 @@ def keyword_counter(value: str) -> Counter[str]:
     tokens = [
         token
         for token in tokenize(value)
-        if len(token) >= 2 and token not in STOPWORDS and token not in COMMON_WORDS and not token.isdigit()
+        if len(token) >= 2
+        and token not in STOPWORDS
+        and token not in COMMON_WORDS
+        and token not in JOB_BOARD_NOISE_TERMS
+        and not token.isdigit()
     ]
     return Counter(tokens)
 

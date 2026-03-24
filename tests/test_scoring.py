@@ -148,6 +148,37 @@ Required:
     assert "PERSONALIZACAO PARA ESTA VAGA" not in generated_resume
 
 
+def test_generated_resume_rewrites_experience_into_action_bullets() -> None:
+    document = make_document(
+        "resume.txt",
+        ".txt",
+        """
+Ana Souza
+ana@example.com
+
+Experiencia
+Engenheira de Dados - ACME
+2021 - 2025
+Desenvolvimento de pipelines ETL para analytics e operacoes.
+Implementacao de infraestrutura como codigo com Terraform na AWS.
+
+Educacao
+Bacharelado em Estatistica
+
+Skills
+Python, SQL, AWS, Terraform
+""",
+    )
+
+    result = analyze_document(document)
+    generated_resume = generate_resume_draft(document, result)
+    generated_result = analyze_resume(make_document("generated.txt", ".txt", generated_resume))
+
+    assert "- Desenvolveu pipelines ETL para analytics e operacoes." in generated_resume
+    assert "- Implementou infraestrutura como codigo com Terraform na AWS." in generated_resume
+    assert generated_result.action_bullet_count >= 2
+
+
 def test_competencias_tecnicas_is_detected_as_skills_section() -> None:
     document = make_document(
         "resume.txt",
@@ -204,10 +235,10 @@ SKILLS
 Python, SQL
 """.strip()
 
-    updated = apply_personalization_to_draft(draft, "Senior Data Analyst", ["Power BI", "AWS"])
+    updated = apply_personalization_to_draft(draft, "Senior Data Analyst", ["devops", "mysql", "nosql"])
 
     assert "Senior Data Analyst" in updated.splitlines()[:4]
-    assert "Python, SQL, Power BI, AWS" in updated
+    assert "Python, SQL, DevOps, MySQL, NoSQL" in updated
 
 
 def test_job_title_ignores_navigation_noise_from_page() -> None:
@@ -253,18 +284,18 @@ def test_job_title_override_is_sanitized_before_personalization() -> None:
         "resume.txt",
         ".txt",
         """
-João Lima
+Joao Lima
 joao@example.com
 
 Resumo
-Profissional com experiência em engenharia de dados.
+Profissional com experiencia em engenharia de dados.
 
-Experiência
+Experiencia
 2021 - 2025
 - Implementou pipelines com Python e SQL.
 
-Educação
-Bacharelado em Computação
+Educacao
+Bacharelado em Computacao
 
 Skills
 Python, SQL, AWS
@@ -273,10 +304,53 @@ Python, SQL, AWS
 
     result = analyze_document(
         document,
-        job_text="Descrição longa da vaga",
+        job_text="Descricao longa da vaga",
         job_source="https://example.com/job",
-        job_title_override="GFT Technologies hiring Engenharia de Dados AWS Sênior - ID 121504 | LinkedIn",
+        job_title_override="GFT Technologies hiring Engenharia de Dados AWS Senior - ID 121504 | LinkedIn",
     )
 
     assert result.job_match is not None
-    assert result.job_match.job_title == "Engenharia de Dados AWS Sênior"
+    assert result.job_match.job_title == "Engenharia de Dados AWS Senior"
+
+
+def test_job_match_ignores_job_board_noise_terms() -> None:
+    document = make_document(
+        "resume.txt",
+        ".txt",
+        """
+Renato Rocha
+renato@example.com
+
+Resumo
+Profissional com experiencia em AWS, Python, SQL e Kubernetes.
+
+Experiencia
+2021 - 2025
+- Implementou pipelines de dados na AWS.
+
+Educacao
+Bacharelado em Sistemas de Informacao
+
+Skills
+AWS, Python, SQL, Kubernetes
+""",
+    )
+
+    job_description = """
+Clear text
+Engenharia de Dados AWS Senior
+Brazil - shared 10 months ago - jobs
+Required:
+- AWS
+- Python
+- SQL
+- Kubernetes
+"""
+
+    result = analyze_document(document, job_text=job_description, job_source="linkedin")
+
+    assert result.job_match is not None
+    assert "brazil" not in result.job_match.missing_keywords
+    assert "engineer" not in result.job_match.missing_keywords
+    assert "ago" not in result.job_match.missing_keywords
+    assert "jobs" not in result.job_match.missing_keywords

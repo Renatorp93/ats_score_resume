@@ -11,6 +11,31 @@ from ats_score_resume.exporters import build_docx_resume, build_html_resume
 from ats_score_resume.job_source import JobInput, JobSourceError, resolve_job_input
 from ats_score_resume.scoring import AnalysisResult, Suggestion, analyze_document, display_section_name, generate_resume_draft
 
+TERM_STYLE_MAP = {
+    "api": "API",
+    "aws": "AWS",
+    "bi": "BI",
+    "ci/cd": "CI/CD",
+    "css": "CSS",
+    "devops": "DevOps",
+    "docker": "Docker",
+    "etl": "ETL",
+    "elt": "ELT",
+    "git": "Git",
+    "html": "HTML",
+    "kpi": "KPI",
+    "kubernetes": "Kubernetes",
+    "mysql": "MySQL",
+    "node.js": "Node.js",
+    "nosql": "NoSQL",
+    "power bi": "Power BI",
+    "python": "Python",
+    "react": "React",
+    "sql": "SQL",
+    "terraform": "Terraform",
+    "ux": "UX",
+}
+
 
 def main() -> None:
     st.set_page_config(page_title="ATS Score Resume", page_icon="A", layout="wide")
@@ -274,8 +299,9 @@ def personalization_terms(result: AnalysisResult) -> list[str]:
 
     ordered: list[str] = []
     for term in [*result.job_match.missing_required_terms, *result.job_match.missing_keywords]:
-        if term not in ordered:
-            ordered.append(term)
+        formatted = format_skill_term(term)
+        if formatted not in ordered:
+            ordered.append(formatted)
     return ordered[:12]
 
 
@@ -306,16 +332,17 @@ def upsert_top_title(draft_text: str, title: str) -> str:
 
 
 def merge_terms_into_skills(draft_text: str, selected_terms: list[str]) -> str:
-    cleaned_terms = unique_terms(selected_terms)
     sections = split_draft_sections(draft_text)
 
     for index, (heading, content) in enumerate(sections):
         if heading == "SKILLS":
             existing = [item.strip() for item in re.split(r"[,\n;|]", content) if item.strip()]
+            cleaned_terms = [format_skill_term(term, existing) for term in selected_terms]
             merged = unique_terms(existing + cleaned_terms)
             sections[index] = ("SKILLS", ", ".join(merged))
             return join_draft_sections(sections)
 
+    cleaned_terms = unique_terms([format_skill_term(term) for term in selected_terms])
     sections.append(("SKILLS", ", ".join(cleaned_terms)))
     return join_draft_sections(sections)
 
@@ -330,6 +357,35 @@ def unique_terms(items: list[str]) -> list[str]:
         if key not in seen:
             seen[key] = clean
     return list(seen.values())
+
+
+def format_skill_term(term: str, existing_terms: list[str] | None = None) -> str:
+    clean = term.strip()
+    if not clean:
+        return clean
+
+    if existing_terms:
+        for existing in existing_terms:
+            if existing.strip().casefold() == clean.casefold():
+                return existing.strip()
+
+    lower = clean.casefold()
+    if lower in TERM_STYLE_MAP:
+        return TERM_STYLE_MAP[lower]
+
+    if " / " in clean:
+        return " / ".join(format_skill_term(part, existing_terms) for part in clean.split(" / "))
+    if "/" in clean:
+        return "/".join(format_skill_term(part, existing_terms) for part in clean.split("/"))
+    if "-" in clean:
+        return "-".join(format_skill_term(part, existing_terms) for part in clean.split("-"))
+    if " " in clean:
+        return " ".join(format_skill_term(part, existing_terms) for part in clean.split())
+    if clean.isupper():
+        return clean
+    if len(clean) <= 3:
+        return clean.upper()
+    return clean[:1].upper() + clean[1:].lower()
 
 
 def split_draft_sections(draft_text: str) -> list[tuple[str | None, str]]:
