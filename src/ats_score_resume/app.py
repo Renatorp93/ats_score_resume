@@ -6,7 +6,7 @@ import streamlit as st
 
 from ats_score_resume.document_parser import UnsupportedFileTypeError, extract_document
 from ats_score_resume.job_source import JobSourceError, resolve_job_input
-from ats_score_resume.scoring import AnalysisResult, analyze_document
+from ats_score_resume.scoring import AnalysisResult, analyze_document, generate_resume_draft
 
 
 def main() -> None:
@@ -72,11 +72,11 @@ def main() -> None:
         job_text=job_input.text if job_input else None,
         job_source=job_input.source if job_input else "",
     )
-    render_result(result, resume_file.name)
+    render_result(result, document)
 
 
-def render_result(result: AnalysisResult, filename: str) -> None:
-    st.success(f"Analise concluida para `{filename}`.")
+def render_result(result: AnalysisResult, document) -> None:
+    st.success(f"Analise concluida para `{document.filename}`.")
     st.progress(result.overall_score / 100)
 
     metrics_columns = st.columns(3 if result.job_match else 2)
@@ -119,6 +119,28 @@ def render_result(result: AnalysisResult, filename: str) -> None:
                 ]
             )
         )
+
+    st.subheader("Curriculo otimizado")
+    with st.expander("Gerar rascunho com base nas dicas do ATS", expanded=False):
+        generated_resume = generate_resume_draft(document, result)
+        st.caption("Revise o texto antes de enviar. Mantenha apenas experiencias e skills que sejam verdadeiras.")
+        st.text_area(
+            "Rascunho gerado",
+            value=generated_resume,
+            height=420,
+        )
+        st.download_button(
+            "Baixar rascunho em TXT",
+            data=generated_resume,
+            file_name=build_generated_filename(document.filename),
+            mime="text/plain",
+            use_container_width=True,
+        )
+
+
+def build_generated_filename(filename: str) -> str:
+    base_name = filename.rsplit(".", maxsplit=1)[0]
+    return f"{base_name}_otimizado.txt"
 
 
 if __name__ == "__main__":

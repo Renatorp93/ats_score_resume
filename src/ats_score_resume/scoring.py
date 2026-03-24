@@ -319,6 +319,212 @@ def build_suggestions(
     return suggestions[:7]
 
 
+def generate_resume_draft(document: ExtractedDocument, result: AnalysisResult) -> str:
+    header_lines, sections = parse_resume_sections(document.cleaned_text)
+    name, contacts = extract_resume_header(header_lines)
+
+    blocks = [
+        build_header_block(name, contacts),
+        build_summary_block(sections.get("summary", []), result),
+        build_skills_block(sections.get("skills", []), result),
+        build_experience_block(sections.get("experience", []), result),
+        build_education_block(sections.get("education", [])),
+    ]
+
+    certifications_block = build_optional_section("CERTIFICACOES", sections.get("certifications", []))
+    if certifications_block:
+        blocks.append(certifications_block)
+
+    customization_block = build_customization_block(result)
+    if customization_block:
+        blocks.append(customization_block)
+
+    return "\n\n".join(block for block in blocks if block).strip()
+
+
+def parse_resume_sections(text: str) -> tuple[list[str], dict[str, list[str]]]:
+    header_lines: list[str] = []
+    sections: dict[str, list[str]] = {}
+    current_section: str | None = None
+
+    for raw_line in split_nonempty_lines(text):
+        section_name = identify_section(raw_line)
+        if section_name:
+            current_section = section_name
+            sections.setdefault(section_name, [])
+            continue
+
+        if current_section:
+            sections.setdefault(current_section, []).append(raw_line.strip())
+        else:
+            header_lines.append(raw_line.strip())
+
+    return header_lines, sections
+
+
+def identify_section(line: str) -> str | None:
+    normalized_line = normalize_for_matching(line)
+    for section, aliases in SECTION_ALIASES.items():
+        if matches_heading(normalized_line, aliases):
+            return section
+    return None
+
+
+def extract_resume_header(header_lines: list[str]) -> tuple[str, list[str]]:
+    if not header_lines:
+        return "NOME SOBRENOME", []
+
+    name = header_lines[0]
+    contacts = header_lines[1:]
+    if EMAIL_PATTERN.search(name) or PHONE_PATTERN.search(name):
+        name = "NOME SOBRENOME"
+        contacts = header_lines
+    return name, contacts[:4]
+
+
+def build_header_block(name: str, contacts: list[str]) -> str:
+    lines = [name.upper()]
+    lines.extend(contacts)
+    return "\n".join(lines)
+
+
+def build_summary_block(summary_lines: list[str], result: AnalysisResult) -> str:
+    if summary_lines:
+        summary_text = " ".join(line.strip("- ").strip() for line in summary_lines if line.strip())
+    else:
+        focus_terms = result.resume.keyword_terms[:4]
+        if result.job_match and result.job_match.job_title:
+            summary_text = (
+                f"Profissional com experiencia em {format_list_for_sentence(focus_terms)} "
+                f"e foco em oportunidades de {result.job_match.job_title}."
+            )
+        else:
+            summary_text = (
+                f"Profissional com experiencia em {format_list_for_sentence(focus_terms)} "
+                "e foco em resultados, clareza de skills e compatibilidade com ATS."
+            )
+
+    if result.resume.quantified_achievement_count < 2:
+        summary_text = (
+            f"{summary_text} "
+            "Inclua um resultado numerico real no resumo para reforcar impacto."
+        ).strip()
+
+    return f"RESUMO PROFISSIONAL\n{summary_text}"
+
+
+def build_skills_block(skill_lines: list[str], result: AnalysisResult) -> str:
+    existing_skills = collect_inline_items(skill_lines)
+    for term in result.resume.keyword_terms[:10]:
+        if term not in existing_skills:
+            existing_skills.append(term)
+
+    if result.job_match:
+        for term in result.job_match.matched_keywords[:6]:
+            if term not in existing_skills:
+                existing_skills.append(term)
+
+    if not existing_skills:
+        existing_skills = [
+            "Adicione aqui suas hard skills principais",
+            "Ex.: Python, SQL, Excel, Power BI, Gestao de Projetos",
+        ]
+
+    return "SKILLS\n" + ", ".join(existing_skills[:16])
+
+
+def build_experience_block(experience_lines: list[str], result: AnalysisResult) -> str:
+    if not experience_lines:
+        experience_lines = [
+            "[Cargo] - [Empresa]",
+            "[Periodo]",
+            "- Descreva uma entrega relevante com verbo de acao.",
+            "- Adicione um resultado numerico real: ex. reduzi prazo em 20%.",
+        ]
+
+    formatted_lines: list[str] = []
+    for line in experience_lines:
+        clean_line = line.strip()
+        if not clean_line:
+            continue
+        if looks_like_resume_heading(clean_line) or DATE_PATTERN.search(clean_line):
+            formatted_lines.append(clean_line)
+            continue
+        if clean_line.startswith(("-", "*")):
+            formatted_lines.append(clean_line)
+            continue
+        if line_starts_with_action_verb(clean_line):
+            formatted_lines.append(f"- {clean_line}")
+            continue
+        formatted_lines.append(clean_line if len(clean_line.split()) <= 5 else f"- {clean_line}")
+
+    if result.resume.quantified_achievement_count < 2:
+        formatted_lines.append("- [Adicionar um bullet com impacto mensuravel, usando numero ou percentual real.]")
+
+    return "EXPERIENCIA PROFISSIONAL\n" + "\n".join(formatted_lines)
+
+
+def build_education_block(education_lines: list[str]) -> str:
+    if not education_lines:
+        education_lines = [
+            "[Curso ou grau]",
+            "[Instituicao] - [Ano de conclusao ou previsao]",
+        ]
+
+    return "EDUCACAO\n" + "\n".join(education_lines)
+
+
+def build_optional_section(title: str, lines: list[str]) -> str:
+    if not lines:
+        return ""
+    return f"{title}\n" + "\n".join(lines)
+
+
+def build_customization_block(result: AnalysisResult) -> str:
+    if not result.job_match:
+        return ""
+
+    lines = ["PERSONALIZACAO PARA ESTA VAGA"]
+    if result.job_match.job_title:
+        lines.append(f"Titulo alvo: {result.job_match.job_title}")
+    if result.job_match.missing_required_terms:
+        lines.append(
+            "Validar e adicionar apenas se verdadeiro: "
+            + ", ".join(result.job_match.missing_required_terms[:6])
+        )
+    if result.job_match.missing_keywords:
+        lines.append(
+            "Keywords para considerar no resumo, skills ou experiencia: "
+            + ", ".join(result.job_match.missing_keywords[:6])
+        )
+    return "\n".join(lines)
+
+
+def collect_inline_items(lines: list[str]) -> list[str]:
+    items: list[str] = []
+    for line in lines:
+        for item in re.split(r"[;,|]", line):
+            clean_item = item.strip(" -*")
+            if clean_item and clean_item not in items:
+                items.append(clean_item)
+    return items
+
+
+def format_list_for_sentence(items: list[str]) -> str:
+    if not items:
+        return "resultados e melhoria continua"
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return f"{items[0]} e {items[1]}"
+    return ", ".join(items[:-1]) + f" e {items[-1]}"
+
+
+def looks_like_resume_heading(line: str) -> bool:
+    normalized = normalize_for_matching(line)
+    return bool(identify_section(normalized)) or " - " in line or line.isupper()
+
+
 def detect_sections(lines: list[str]) -> list[str]:
     detected: list[str] = []
     for section, aliases in SECTION_ALIASES.items():

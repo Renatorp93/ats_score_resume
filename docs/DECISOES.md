@@ -92,3 +92,14 @@ Adicionar um arquivo `app.py` na raiz que injeta `src/` no `sys.path` e delega p
 
 Motivo:
 Simplifica a experiencia de execucao com `streamlit run app.py` e reduz atrito para quem clonar o repositorio.
+
+### D009 - Gerar um rascunho otimizado sem inventar experiencia
+
+Contexto:
+O proximo passo pedido foi permitir a geracao do curriculo a partir das dicas encontradas.
+
+Decisao:
+Gerar um rascunho editavel com estrutura ATS, reaproveitando o conteudo extraido do curriculo original e adicionando placeholders e notas de customizacao quando faltarem dados.
+
+Motivo:
+Entrega valor pratico imediatamente sem correr o risco de inventar skills, resultados ou experiencias que a pessoa nao possui.
