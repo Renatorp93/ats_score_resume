@@ -246,3 +246,37 @@ Required:
 
     assert result.job_match is not None
     assert result.job_match.job_title == "Senior Data Analyst"
+
+
+def test_job_title_override_is_sanitized_before_personalization() -> None:
+    document = make_document(
+        "resume.txt",
+        ".txt",
+        """
+João Lima
+joao@example.com
+
+Resumo
+Profissional com experiência em engenharia de dados.
+
+Experiência
+2021 - 2025
+- Implementou pipelines com Python e SQL.
+
+Educação
+Bacharelado em Computação
+
+Skills
+Python, SQL, AWS
+""",
+    )
+
+    result = analyze_document(
+        document,
+        job_text="Descrição longa da vaga",
+        job_source="https://example.com/job",
+        job_title_override="Engenharia de Dados AWS Sênior - ID 121504 | LinkedIn",
+    )
+
+    assert result.job_match is not None
+    assert result.job_match.job_title == "Engenharia de Dados AWS Sênior"

@@ -8,7 +8,7 @@ import streamlit as st
 
 from ats_score_resume.document_parser import ExtractedDocument, UnsupportedFileTypeError, extract_document
 from ats_score_resume.exporters import build_docx_resume, build_html_resume
-from ats_score_resume.job_source import JobSourceError, resolve_job_input
+from ats_score_resume.job_source import JobInput, JobSourceError, resolve_job_input
 from ats_score_resume.scoring import AnalysisResult, Suggestion, analyze_document, display_section_name, generate_resume_draft
 
 
@@ -76,18 +76,24 @@ def main() -> None:
             document=document,
             job_text=job_input.text if job_input else None,
             job_source=job_input.source if job_input else "",
+            job_title_override=job_input.title if job_input else None,
         )
         st.session_state[state_key] = {
             "document": document,
             "result": result,
+            "job_input": job_input,
         }
 
     saved_analysis = st.session_state.get(state_key)
     if saved_analysis:
-        render_result(saved_analysis["result"], saved_analysis["document"])
+        render_result(
+            saved_analysis["result"],
+            saved_analysis["document"],
+            saved_analysis.get("job_input"),
+        )
 
 
-def render_result(result: AnalysisResult, document: ExtractedDocument) -> None:
+def render_result(result: AnalysisResult, document: ExtractedDocument, job_input: JobInput | None = None) -> None:
     st.success(f"Análise concluída para `{document.filename}`.")
 
     hero_col, metrics_col = st.columns((1.1, 1), gap="large")
@@ -144,7 +150,7 @@ def render_result(result: AnalysisResult, document: ExtractedDocument) -> None:
     ensure_draft_state(draft_key, document, result)
 
     if result.job_match:
-        render_personalization_section(result, draft_key)
+        render_personalization_section(result, draft_key, job_input)
 
     st.subheader("Currículo otimizado")
     with st.expander("Rascunho editável", expanded=True):
@@ -167,7 +173,7 @@ def render_result(result: AnalysisResult, document: ExtractedDocument) -> None:
             st.info("Depois de revisar o texto, marque a caixa acima para liberar a geração do arquivo final.")
 
 
-def render_personalization_section(result: AnalysisResult, draft_key: str) -> None:
+def render_personalization_section(result: AnalysisResult, draft_key: str, job_input: JobInput | None) -> None:
     st.subheader("Personalização da vaga")
     st.markdown(
         "Essa área serve para adaptar o currículo antes da geração final. "
@@ -175,16 +181,30 @@ def render_personalization_section(result: AnalysisResult, draft_key: str) -> No
     )
 
     suggested_terms = personalization_terms(result)
-    title_option = result.job_match.job_title if result.job_match else None
+    inferred_title = result.job_match.job_title if result.job_match else None
+    fallback_title = job_input.title if job_input else None
+    default_title = inferred_title or fallback_title or ""
 
-    if title_option:
-        st.markdown(f"- Título sugerido para o topo do currículo: `{title_option}`")
+    manual_title_key = f"{draft_key}_manual_title"
+    if manual_title_key not in st.session_state:
+        st.session_state[manual_title_key] = default_title
+
+    if inferred_title:
+        st.markdown(f"- Título sugerido para o topo do currículo: `{inferred_title}`")
+    else:
+        st.warning("Não conseguimos identificar o título da vaga com segurança. Preencha manualmente abaixo.")
+
+    manual_title = st.text_input(
+        "Título da vaga para usar no topo do currículo",
+        key=manual_title_key,
+        placeholder="Ex.: Engenharia de Dados AWS Sênior",
+    ).strip()
 
     apply_title = st.checkbox(
         "Adicionar o título sugerido no topo do currículo",
         key=f"{draft_key}_apply_title",
-        value=bool(title_option),
-        disabled=not bool(title_option),
+        value=bool(default_title),
+        disabled=not bool(manual_title),
     )
 
     selected_terms = st.multiselect(
@@ -197,7 +217,7 @@ def render_personalization_section(result: AnalysisResult, draft_key: str) -> No
     if st.button("Aplicar personalização ao rascunho", key=f"{draft_key}_apply_button", use_container_width=True):
         updated_draft = apply_personalization_to_draft(
             st.session_state[draft_key],
-            title_option if apply_title else None,
+            manual_title if apply_title else None,
             selected_terms,
         )
         st.session_state[draft_key] = updated_draft

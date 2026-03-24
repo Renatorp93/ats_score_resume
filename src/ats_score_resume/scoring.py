@@ -154,9 +154,14 @@ class AnalysisResult:
     job_match: JobMatchAnalysis | None = None
 
 
-def analyze_document(document: ExtractedDocument, job_text: str | None = None, job_source: str = "") -> AnalysisResult:
+def analyze_document(
+    document: ExtractedDocument,
+    job_text: str | None = None,
+    job_source: str = "",
+    job_title_override: str | None = None,
+) -> AnalysisResult:
     resume = analyze_resume(document)
-    job_match = analyze_job_match(document.cleaned_text, job_text, job_source) if job_text else None
+    job_match = analyze_job_match(document.cleaned_text, job_text, job_source, job_title_override) if job_text else None
     overall_score = resume.score if job_match is None else round((resume.score * 0.45) + (job_match.score * 0.55))
     suggestions = build_suggestions(document, resume, job_match)
     return AnalysisResult(
@@ -197,7 +202,12 @@ def analyze_resume(document: ExtractedDocument) -> ResumeAnalysis:
     )
 
 
-def analyze_job_match(resume_text: str, job_text: str | None, source: str) -> JobMatchAnalysis | None:
+def analyze_job_match(
+    resume_text: str,
+    job_text: str | None,
+    source: str,
+    preferred_title: str | None = None,
+) -> JobMatchAnalysis | None:
     if not job_text:
         return None
 
@@ -214,7 +224,7 @@ def analyze_job_match(resume_text: str, job_text: str | None, source: str) -> Jo
     missing_required_terms = [term for term in required_terms if term not in resume_term_set]
     required_score = clamp_score(overlap_ratio(required_terms, resume_terms) * 25, 25) if required_terms else 13
 
-    job_title = extract_job_title(job_text)
+    job_title = sanitize_job_title(preferred_title) if preferred_title else extract_job_title(job_text)
     title_score = score_title_alignment(job_title, resume_text, job_text)
     experience_education_score = score_evidence_alignment(job_text, resume_text)
     terminology_score = score_terminology_fidelity(job_text, resume_text)
@@ -741,7 +751,7 @@ def extract_job_title(job_text: str) -> str | None:
             and not any(marker in normalized_line for marker in REQUIRED_MARKERS)
             and looks_like_job_title(line)
         ):
-            return line.strip()
+            return sanitize_job_title(line)
     return None
 
 
@@ -749,9 +759,26 @@ def looks_like_job_title(line: str) -> bool:
     normalized = normalize_for_matching(line)
     if normalized in NOISE_JOB_TITLE_LINES:
         return False
-    if any(token in normalized for token in ("cookie", "privacy", "search", "navigation", "content")):
+    if any(token in normalized for token in ("cookie", "privacy", "search", "navigation", "content", "clear text")):
         return False
     return True
+
+
+def sanitize_job_title(value: str | None) -> str | None:
+    if not value:
+        return None
+
+    cleaned = value.strip()
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    cleaned = cleaned.split("|")[0].strip()
+    cleaned = re.sub(r"\s*-\s*id\s*\d+\b.*$", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*\(\d+\)\s*$", "", cleaned)
+    cleaned = cleaned.strip(" -")
+
+    if not cleaned or not looks_like_job_title(cleaned):
+        return None
+
+    return cleaned
 
 
 def score_title_alignment(job_title: str | None, resume_text: str, job_text: str) -> int:

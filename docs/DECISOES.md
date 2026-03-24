@@ -125,3 +125,14 @@ Mover a personalizacao para uma sessao propria antes do rascunho, com aplicacao 
 
 Motivo:
 Mantem o curriculo final limpo e evita que instrucoes internas vazem para o documento exportado.
+
+### D012 - Combinar deteccao automatica e titulo manual da vaga
+
+Contexto:
+Algumas paginas de vaga retornam ruidos como `Clear text` ou falham em expor o titulo correto no HTML extraido.
+
+Decisao:
+Melhorar a deteccao do titulo usando `meta`, `title` e `h1`, e abrir um campo manual no app quando a identificacao nao for confiavel.
+
+Motivo:
+Evita travar a personalizacao da vaga e deixa o usuario no controle quando a automacao nao encontra um titulo valido.
