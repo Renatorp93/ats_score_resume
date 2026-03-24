@@ -15,6 +15,7 @@ Aplicacao local para analisar curriculos com foco em compatibilidade com ATS, ge
 9. Explica o breakdown do score por criterio.
 10. Define uma meta de corte para ATS e, opcionalmente, usa IA para reescrever o curriculo ate atingir a meta ou esgotar ganhos seguros.
 11. Mostra o que aumentou e o que diminuiu a nota depois da otimizacao.
+12. Compara o curriculo original com o otimizado lado a lado, por secao.
 
 ## Stack
 

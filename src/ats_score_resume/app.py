@@ -8,6 +8,7 @@ import re
 import streamlit as st
 
 from ats_score_resume.ai_optimizer import AIOptimizationError, OpenAIResumeOptimizer
+from ats_score_resume.comparison import ResumeComparison, compare_resume_versions
 from ats_score_resume.document_parser import ExtractedDocument, UnsupportedFileTypeError, extract_document
 from ats_score_resume.exporters import build_docx_resume, build_html_resume
 from ats_score_resume.job_source import JobInput, JobSourceError, resolve_job_input
@@ -245,6 +246,9 @@ def render_result(result: AnalysisResult, document: ExtractedDocument, job_input
         else:
             st.info("Depois de revisar o texto, marque a caixa acima para liberar a geracao do arquivo final.")
 
+    comparison = compare_resume_versions(document.cleaned_text, st.session_state[draft_key])
+    render_resume_comparison(comparison, document.cleaned_text, st.session_state[draft_key])
+
 
 def render_optimization_section(
     baseline_result: AnalysisResult,
@@ -377,6 +381,62 @@ def render_optimization_outcome(outcome: OptimizationOutcome) -> None:
                 if step.confidence_notes:
                     for note in step.confidence_notes:
                         st.markdown(f"- Observacao: {note}")
+
+
+def render_resume_comparison(comparison: ResumeComparison, original_text: str, optimized_text: str) -> None:
+    st.subheader("Comparacao entre curriculos")
+    st.markdown(
+        "Use esta comparacao para validar se a reescrita melhorou o curriculo sem distorcer sua historia profissional."
+    )
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        render_score_chip("Secoes alteradas", comparison.changed_section_count, "Quantidade de secoes com mudancas visiveis.")
+    with col2:
+        render_score_chip("Linhas adicionadas", comparison.added_line_count, "Novas linhas ou bullets presentes no rascunho.")
+    with col3:
+        render_score_chip("Linhas removidas", comparison.removed_line_count, "Linhas do original que nao ficaram na versao otimizada.")
+
+    with st.expander("Visao completa lado a lado"):
+        before_col, after_col = st.columns(2)
+        with before_col:
+            st.markdown("**Original**")
+            st.code(original_text or "Sem conteudo", language="markdown")
+        with after_col:
+            st.markdown("**Otimizado**")
+            st.code(optimized_text or "Sem conteudo", language="markdown")
+
+    for section in comparison.sections:
+        if not section.added_lines and not section.removed_lines:
+            continue
+        label = (
+            f"{section.label} · {section.similarity_ratio}% parecido · "
+            f"+{len(section.added_lines)} / -{len(section.removed_lines)}"
+        )
+        with st.expander(label):
+            before_col, after_col = st.columns(2)
+            with before_col:
+                st.markdown("**Antes**")
+                st.code("\n".join(section.original_lines) or "Sem conteudo nesta secao", language="markdown")
+            with after_col:
+                st.markdown("**Depois**")
+                st.code("\n".join(section.optimized_lines) or "Sem conteudo nesta secao", language="markdown")
+
+            delta_col1, delta_col2 = st.columns(2)
+            with delta_col1:
+                st.markdown("**Entrou no rascunho**")
+                if section.added_lines:
+                    for line in section.added_lines:
+                        st.markdown(f"- {line}")
+                else:
+                    st.markdown("- Nenhuma linha nova nesta secao.")
+            with delta_col2:
+                st.markdown("**Saiu do original**")
+                if section.removed_lines:
+                    for line in section.removed_lines:
+                        st.markdown(f"- {line}")
+                else:
+                    st.markdown("- Nenhuma linha removida nesta secao.")
 
 
 def render_change_lists(improved: list, declined: list) -> None:

@@ -180,3 +180,14 @@ Manter o score deterministico como fonte de verdade e adicionar uma camada opcio
 
 Motivo:
 Combina auditabilidade, controle de risco e uma reescrita muito mais contextual, alem de mostrar com clareza o que subiu, o que caiu e se ainda faz sentido insistir na vaga.
+
+### D017 - Comparar original e otimizado por secao
+
+Contexto:
+Quando a IA ou o motor heuristico reescrevem o curriculo, o usuario precisa validar rapido se as mudancas ainda representam fielmente sua experiencia.
+
+Decisao:
+Adicionar uma comparacao lado a lado entre o curriculo original e o otimizado, com resumo de secoes alteradas e detalhes por secao mostrando o que entrou e o que saiu.
+
+Motivo:
+Deixa a revisao mais segura, acelera a aprovacao humana e reduz o risco de exportar um texto que melhorou a nota, mas perdeu fidelidade.
