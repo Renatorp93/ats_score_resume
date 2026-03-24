@@ -306,17 +306,18 @@ def upsert_top_title(draft_text: str, title: str) -> str:
 
 
 def merge_terms_into_skills(draft_text: str, selected_terms: list[str]) -> str:
-    match = re.search(r"(?ms)^SKILLS\s*\n(.*?)(?=\n[A-Z][A-Z ]+\n|\Z)", draft_text)
     cleaned_terms = unique_terms(selected_terms)
+    sections = split_draft_sections(draft_text)
 
-    if match:
-        existing = [item.strip() for item in re.split(r"[,\n;|]", match.group(1)) if item.strip()]
-        merged = unique_terms(existing + cleaned_terms)
-        replacement = "SKILLS\n" + ", ".join(merged)
-        return draft_text[: match.start()] + replacement + draft_text[match.end() :]
+    for index, (heading, content) in enumerate(sections):
+        if heading == "SKILLS":
+            existing = [item.strip() for item in re.split(r"[,\n;|]", content) if item.strip()]
+            merged = unique_terms(existing + cleaned_terms)
+            sections[index] = ("SKILLS", ", ".join(merged))
+            return join_draft_sections(sections)
 
-    skills_block = "SKILLS\n" + ", ".join(cleaned_terms)
-    return draft_text.rstrip() + "\n\n" + skills_block
+    sections.append(("SKILLS", ", ".join(cleaned_terms)))
+    return join_draft_sections(sections)
 
 
 def unique_terms(items: list[str]) -> list[str]:
@@ -329,6 +330,51 @@ def unique_terms(items: list[str]) -> list[str]:
         if key not in seen:
             seen[key] = clean
     return list(seen.values())
+
+
+def split_draft_sections(draft_text: str) -> list[tuple[str | None, str]]:
+    lines = draft_text.splitlines()
+    sections: list[tuple[str | None, list[str]]] = []
+    current_heading: str | None = None
+    current_lines: list[str] = []
+
+    for line in lines:
+        if is_all_caps_heading(line):
+            if current_heading is not None or current_lines:
+                sections.append((current_heading, current_lines))
+            current_heading = line.strip()
+            current_lines = []
+            continue
+        current_lines.append(line.rstrip())
+
+    if current_heading is not None or current_lines:
+        sections.append((current_heading, current_lines))
+
+    normalized: list[tuple[str | None, str]] = []
+    for heading, content_lines in sections:
+        content = "\n".join(content_lines).strip()
+        normalized.append((heading, content))
+    return normalized
+
+
+def join_draft_sections(sections: list[tuple[str | None, str]]) -> str:
+    blocks: list[str] = []
+    for heading, content in sections:
+        if heading:
+            block = heading if not content else f"{heading}\n{content}"
+        else:
+            block = content
+        if block.strip():
+            blocks.append(block.strip())
+    return "\n\n".join(blocks).strip()
+
+
+def is_all_caps_heading(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped:
+        return False
+    letters = [char for char in stripped if char.isalpha()]
+    return bool(letters) and all(char.isupper() for char in letters)
 
 
 def inject_styles() -> None:
@@ -490,24 +536,24 @@ def render_breakdown_cards(metrics: list, gap_map: dict[str, list[str]]) -> None
     for metric in metrics:
         ratio = 0 if metric.max_score == 0 else round((metric.score / metric.max_score) * 100)
         missing_items = gap_map.get(metric.key, [])
-        missing_summary = summarize_missing_items(missing_items)
-        st.markdown(
-            f"""
-            <div class="breakdown-card">
-                <div class="eyebrow">{html.escape(score_status(ratio))}</div>
-                <div class="title">{html.escape(metric.label)}</div>
-                <div class="details"><strong>{metric.score}/{metric.max_score}</strong> pontos</div>
-                <div class="meter"><div class="meter-fill" style="width:{ratio}%"></div></div>
-                <div class="details">{html.escape(metric.details)}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        if missing_summary:
-            st.caption(missing_summary)
-            with st.expander("Ver pontos que faltaram"):
-                for item in missing_items:
-                    st.markdown(f"- {item}")
+        with st.container():
+            st.markdown(
+                f"""
+                <div class="breakdown-card">
+                    <div class="eyebrow">{html.escape(score_status(ratio))}</div>
+                    <div class="title">{html.escape(metric.label)}</div>
+                    <div class="details"><strong>{metric.score}/{metric.max_score}</strong> pontos</div>
+                    <div class="meter"><div class="meter-fill" style="width:{ratio}%"></div></div>
+                    <div class="details">{html.escape(metric.details)}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            if missing_items:
+                label = summarize_missing_items(missing_items)
+                with st.expander(label):
+                    for item in missing_items:
+                        st.markdown(f"- {item}")
 
 
 def build_resume_gap_map(result: AnalysisResult) -> dict[str, list[str]]:
@@ -569,8 +615,8 @@ def summarize_missing_items(items: list[str]) -> str:
     if not items:
         return ""
     if len(items) == 1:
-        return "Faltou 1 ponto de atenção."
-    return f"Faltaram {len(items)} pontos de atenção."
+        return "Ver 1 ponto de atenção"
+    return f"Ver {len(items)} pontos de atenção"
 
 
 def score_color(score: int) -> str:

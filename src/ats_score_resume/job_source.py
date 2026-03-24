@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 import requests
@@ -106,10 +107,15 @@ def sanitize_title_candidate(value: str) -> str | None:
         return None
 
     cleaned = cleaned.replace("Vaga para ", "").replace("Vaga de ", "")
+    cleaned = cleaned.replace("Clear text", "").strip()
+    cleaned = normalize_text(cleaned)
+    cleaned = re.sub(r"^.+?\bhiring\b\s+", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"^.+?\bcontrata(?:ndo)?\b\s+", "", cleaned, flags=re.IGNORECASE)
     cleaned = cleaned.split("|")[0].strip()
     cleaned = cleaned.split("–")[0].strip() if "linkedin" in cleaned.lower() else cleaned
     cleaned = cleaned.split(" at ")[0].strip()
     cleaned = cleaned.split(" na ")[0].strip() if cleaned.lower().count(" na ") == 1 and len(cleaned.split()) > 5 else cleaned
+    cleaned = re.sub(r"\s*-\s*ID\s*\d+\b.*$", "", cleaned, flags=re.IGNORECASE)
     cleaned = cleaned.replace("  ", " ").strip(" -")
 
     cleaned = normalize_text(cleaned)

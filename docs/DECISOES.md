@@ -147,3 +147,14 @@ Adicionar um resumo curto por categoria e um expander com os pontos faltantes ma
 
 Motivo:
 Ajuda o usuario a agir sobre o score sem precisar inferir sozinho o que melhorar em cada bloco.
+
+### D014 - Preservar a estrutura humana do rascunho ao aplicar personalizacao
+
+Contexto:
+Adicionar skills ao rascunho por regex simples podia capturar secoes seguintes e degradar a leitura humana do curriculo.
+
+Decisao:
+Atualizar a personalizacao para operar por secoes do documento, preservando headings, blocos e espacamento.
+
+Motivo:
+O curriculo precisa continuar legivel para recrutadores humanos, nao apenas para ATS.
