@@ -1,4 +1,5 @@
 from ats_score_resume.document_parser import ExtractedDocument
+from ats_score_resume.exporters import build_docx_resume
 from ats_score_resume.scoring import analyze_document, analyze_resume, generate_resume_draft
 
 
@@ -145,3 +146,40 @@ Required:
     assert "SKILLS" in generated_resume
     assert "PERSONALIZACAO PARA ESTA VAGA" in generated_resume
     assert "SQL" in generated_resume or "sql" in generated_resume
+
+
+def test_competencias_tecnicas_is_detected_as_skills_section() -> None:
+    document = make_document(
+        "resume.txt",
+        ".txt",
+        """
+Carlos Lima
+carlos@example.com
+
+Resumo
+Profissional com experiencia em analytics, cloud e automacao.
+
+Experiencia
+2021 - 2024
+- Liderou melhorias de dados em times de produto.
+
+Educacao
+Bacharelado em Sistemas de Informacao
+
+Competencias Tecnicas
+Python, SQL, AWS, API, CI/CD
+""",
+    )
+
+    result = analyze_document(document)
+
+    assert "skills" in result.resume.detected_sections
+    assert result.resume.section_headings["skills"] == "Competencias Tecnicas"
+    assert any("Skills" in suggestion.details for suggestion in result.suggestions)
+
+
+def test_docx_exporter_returns_document_bytes() -> None:
+    content = "NOME SOBRENOME\n\nSKILLS\nPython, SQL"
+    docx_bytes = build_docx_resume(content)
+
+    assert len(docx_bytes) > 100

@@ -103,3 +103,14 @@ Gerar um rascunho editavel com estrutura ATS, reaproveitando o conteudo extraido
 
 Motivo:
 Entrega valor pratico imediatamente sem correr o risco de inventar skills, resultados ou experiencias que a pessoa nao possui.
+
+### D010 - Dar preferencia visual a cards e gauge no resultado
+
+Contexto:
+O breakdown em tabela estava tecnico demais e pouco amigavel para leitura rapida.
+
+Decisao:
+Substituir a tabela por cards com linguagem mais humana e adicionar um velocimetro para o score geral.
+
+Motivo:
+Facilita a interpretacao do resultado e deixa a experiencia mais clara e atraente.

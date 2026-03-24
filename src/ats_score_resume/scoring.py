@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Any
 
 from ats_score_resume.document_parser import ExtractedDocument
 from ats_score_resume.text_utils import (
@@ -49,13 +50,33 @@ SECTION_ALIASES = {
     "skills": (
         "skills",
         "technical skills",
+        "technical competencies",
+        "technical competence",
+        "core skills",
+        "hard skills",
+        "key skills",
         "core competencies",
         "competencies",
         "habilidades",
         "competencias",
+        "competencias tecnicas",
+        "habilidades tecnicas",
+        "ferramentas",
+        "ferramentas e tecnologias",
+        "tecnologias",
+        "stack tecnica",
         "conhecimentos",
     ),
     "certifications": ("certifications", "licenses", "certificacoes", "cursos"),
+}
+
+CANONICAL_SKILL_HEADINGS = {"skills", "technical skills"}
+SECTION_DISPLAY_NAMES = {
+    "summary": "Resumo profissional",
+    "experience": "Experiencia profissional",
+    "education": "Educacao",
+    "skills": "Skills",
+    "certifications": "Certificacoes",
 }
 
 DATE_PATTERN = re.compile(
@@ -96,6 +117,7 @@ class ResumeAnalysis:
     score: int
     metrics: list[MetricResult]
     detected_sections: list[str]
+    section_headings: dict[str, str]
     missing_sections: list[str]
     format_risks: list[str]
     contact_hits: list[str]
@@ -140,9 +162,8 @@ def analyze_resume(document: ExtractedDocument) -> ResumeAnalysis:
     text = document.cleaned_text
     raw_lines = split_nonempty_lines(document.raw_text)
     normalized_text = normalize_for_matching(text)
-    lines_for_matching = [normalize_for_matching(line) for line in raw_lines]
-
-    detected_sections = detect_sections(lines_for_matching)
+    section_headings = detect_section_headings(raw_lines)
+    detected_sections = list(section_headings.keys())
     missing_sections = [section for section in ("summary", "experience", "education", "skills") if section not in detected_sections]
     format_risks = detect_format_risks(document, raw_lines)
     contact_hits = detect_contact_fields(text)
@@ -157,6 +178,7 @@ def analyze_resume(document: ExtractedDocument) -> ResumeAnalysis:
         score=total,
         metrics=[parsing_metric, completeness_metric, content_metric],
         detected_sections=detected_sections,
+        section_headings=section_headings,
         missing_sections=missing_sections,
         format_risks=format_risks,
         contact_hits=contact_hits,
@@ -191,35 +213,35 @@ def analyze_job_match(resume_text: str, job_text: str | None, source: str) -> Jo
     metrics = [
         MetricResult(
             key="keyword_coverage",
-            label="Cobertura de keywords",
+            label="Palavras-chave da vaga",
             score=keyword_score,
             max_score=35,
             details=f"{len(matched_keywords)} de {len(job_terms) or 0} termos principais aparecem no curriculo.",
         ),
         MetricResult(
             key="required_terms",
-            label="Cobertura de requisitos obrigatorios",
+            label="Requisitos obrigatorios",
             score=required_score,
             max_score=25,
             details=f"{len(required_overlap)} de {len(required_terms) or 0} requisitos explicitos aparecem no curriculo.",
         ),
         MetricResult(
             key="title_alignment",
-            label="Alinhamento de titulo e senioridade",
+            label="Titulo e senioridade",
             score=title_score,
             max_score=15,
             details=f"Titulo da vaga identificado como: {job_title or 'nao identificado'}.",
         ),
         MetricResult(
             key="evidence_alignment",
-            label="Evidencias de experiencia e educacao",
+            label="Experiencia e formacao",
             score=experience_education_score,
             max_score=15,
             details="Verifica se termos de experiencia e formacao da vaga aparecem no curriculo.",
         ),
         MetricResult(
             key="terminology_fidelity",
-            label="Fidelidade terminologica",
+            label="Termos tecnicos",
             score=terminology_score,
             max_score=10,
             details="Premia siglas e frases tecnicas que batem exatamente com a vaga.",
@@ -254,11 +276,30 @@ def build_suggestions(
         )
 
     if "skills" in resume.missing_sections:
+        if len(resume.keyword_terms) >= 6:
+            suggestions.append(
+                Suggestion(
+                    priority="alta",
+                    title="Renomeie a secao de competencias para Skills ou Technical Skills",
+                    details="Seu curriculo parece ter termos tecnicos relevantes, mas vale usar um titulo mais padrao para facilitar a leitura por ATS.",
+                )
+            )
+        else:
+            suggestions.append(
+                Suggestion(
+                    priority="alta",
+                    title="Crie uma secao de skills dedicada",
+                    details="Liste hard skills, ferramentas, linguagens, metodologias e certificacoes em uma secao clara para facilitar o match por keywords.",
+                )
+            )
+
+    skill_heading = resume.section_headings.get("skills")
+    if skill_heading and normalize_for_matching(skill_heading) not in CANONICAL_SKILL_HEADINGS:
         suggestions.append(
             Suggestion(
-                priority="alta",
-                title="Crie uma secao de skills dedicada",
-                details="Liste hard skills, ferramentas, linguagens, metodologias e certificacoes em uma secao clara para facilitar o match por keywords.",
+                priority="media",
+                title="Use um titulo mais padrao para a secao de skills",
+                details=f'A secao "{skill_heading}" foi reconhecida, mas "Skills" ou "Technical Skills" tende a ser mais universal para ATS.',
             )
         )
 
@@ -526,16 +567,27 @@ def looks_like_resume_heading(line: str) -> bool:
 
 
 def detect_sections(lines: list[str]) -> list[str]:
-    detected: list[str] = []
-    for section, aliases in SECTION_ALIASES.items():
-        if any(matches_heading(line, aliases) for line in lines):
-            detected.append(section)
+    return list(detect_section_headings(lines).keys())
+
+
+def detect_section_headings(lines: list[str]) -> dict[str, str]:
+    detected: dict[str, str] = {}
+    for line in lines:
+        section = identify_section(line)
+        if section and section not in detected:
+            detected[section] = line.strip()
     return detected
 
 
 def matches_heading(line: str, aliases: tuple[str, ...]) -> bool:
-    trimmed = line.strip(":- ").lower()
-    return any(trimmed == alias or trimmed.startswith(f"{alias}:") for alias in aliases)
+    trimmed = normalize_for_matching(line).strip(":- ").lower()
+    word_count = len(trimmed.split())
+    return any(
+        trimmed == alias
+        or trimmed.startswith(f"{alias}:")
+        or (word_count <= 5 and re.search(rf"\b{re.escape(alias)}\b", trimmed))
+        for alias in aliases
+    )
 
 
 def detect_format_risks(document: ExtractedDocument, lines: list[str]) -> list[str]:
@@ -597,7 +649,7 @@ def score_parsing_and_format(
     )
     return MetricResult(
         key="parsing_format",
-        label="Compatibilidade de parsing e formato",
+        label="Leitura pelo ATS",
         score=score,
         max_score=30,
         details=details,
@@ -623,7 +675,7 @@ def score_completeness(contact_hits: list[str], detected_sections: list[str]) ->
     )
     return MetricResult(
         key="completeness",
-        label="Completude estrutural",
+        label="Estrutura do curriculo",
         score=score,
         max_score=30,
         details=details,
@@ -655,7 +707,7 @@ def score_content_quality(text: str, normalized_text: str, lines: list[str]) -> 
     return (
         MetricResult(
             key="content_quality",
-            label="Qualidade de conteudo",
+            label="Forca do conteudo",
             score=score,
             max_score=40,
             details=details,
@@ -747,3 +799,16 @@ def score_terminology_fidelity(job_text: str, resume_text: str) -> int:
         phrase_ratio = 0.6
 
     return clamp_score(((acronym_ratio + phrase_ratio) / 2) * 10, 10)
+
+
+def display_section_name(section_key: str) -> str:
+    return SECTION_DISPLAY_NAMES.get(section_key, section_key.title())
+
+
+def metric_to_dict(metric: MetricResult) -> dict[str, Any]:
+    return {
+        "label": metric.label,
+        "score": metric.score,
+        "max_score": metric.max_score,
+        "details": metric.details,
+    }

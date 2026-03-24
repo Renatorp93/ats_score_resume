@@ -7,9 +7,11 @@ Aplicacao local para analisar curriculos com foco em compatibilidade com ATS, ge
 1. Le curriculos em `PDF`, `DOCX`, `TXT` e `MD`.
 2. Calcula um `ATS Readiness Score` com base em parsing, estrutura e qualidade do conteudo.
 3. Sugere modificacoes praticas para aumentar o score.
-4. Gera um rascunho de curriculo otimizado com base nas dicas encontradas.
-5. Calcula um `Job Match Score` quando a vaga e informada.
-6. Explica o breakdown do score por criterio.
+4. Destaca o resultado com painel visual e velocimetro de score.
+5. Gera um rascunho de curriculo otimizado com base nas dicas encontradas.
+6. Permite validar o rascunho e baixar o curriculo final em `TXT` ou `DOCX`.
+7. Calcula um `Job Match Score` quando a vaga e informada.
+8. Explica o breakdown do score por criterio.
 
 ## Stack
 
