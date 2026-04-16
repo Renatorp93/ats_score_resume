@@ -7,5 +7,6 @@ __pycache__/
 .streamlit/
 dist/
 build/
+_MEI*/
 *.egg-info/
 pytest-cache-files-*/

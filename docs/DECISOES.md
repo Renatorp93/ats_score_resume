@@ -213,3 +213,14 @@ Criar um launcher Windows empacotado com `PyInstaller`, usando `streamlit.web.bo
 
 Motivo:
 Entrega uma forma simples de distribuicao para usuarios finais sem exigir setup tecnico local e sem depender de comandos manuais para iniciar o sistema.
+
+### D020 - Preferir distribuicao em exe unico para o usuario final
+
+Contexto:
+Entregar uma pasta com muitos arquivos funciona tecnicamente, mas aumenta a chance de erro na distribuicao e na abertura por pessoas sem contexto tecnico.
+
+Decisao:
+Gerar o pacote Windows em modo `onefile`, produzindo um unico `.exe` com extracao temporaria em tempo de execucao.
+
+Motivo:
+Simplifica o compartilhamento do produto e reduz a friccao para usuarios finais que esperam abrir apenas um arquivo.

@@ -45,13 +45,15 @@ python -m pip install pyinstaller
 powershell -ExecutionPolicy Bypass -File .\scripts\build_exe.ps1 -Clean
 ```
 
-O executavel sera criado em `dist\ATS Score Resume\ATS Score Resume.exe`.
+O executavel sera criado em `dist\ATS Score Resume.exe`.
+
+Na primeira abertura, o Windows pode levar alguns segundos para extrair os arquivos internos antes de abrir o navegador.
 
 Ao abrir o `.exe`, o app sobe um servidor local e abre automaticamente o navegador padrao. Se quiser testar sem abrir o navegador automaticamente, rode:
 
 ```powershell
 $env:ATS_SCORE_RESUME_NO_BROWSER="1"
-& ".\dist\ATS Score Resume\ATS Score Resume.exe"
+& ".\dist\ATS Score Resume.exe"
 ```
 
 ## IA opcional
