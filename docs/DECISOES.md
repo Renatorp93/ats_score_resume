@@ -202,3 +202,14 @@ Separar o rascunho proposto do rascunho final e aplicar ao documento editavel ap
 
 Motivo:
 Mantem o usuario no controle, reduz risco de aceitar texto mecanico e aproxima o produto de um fluxo real de revisao antes do envio para recrutadores.
+
+### D019 - Distribuir o app como executavel Windows com launcher proprio
+
+Contexto:
+O produto precisa rodar em maquinas sem Python, terminal ou VS Code, mantendo a experiencia visual do Streamlit para usuarios finais.
+
+Decisao:
+Criar um launcher Windows empacotado com `PyInstaller`, usando `streamlit.web.bootstrap.run` para subir o app internamente e abrir o navegador automaticamente, alem de versionar um script de build reproduzivel.
+
+Motivo:
+Entrega uma forma simples de distribuicao para usuarios finais sem exigir setup tecnico local e sem depender de comandos manuais para iniciar o sistema.

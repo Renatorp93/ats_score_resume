@@ -35,6 +35,25 @@ python -m streamlit run app.py
 
 Depois disso, abra a URL local mostrada pelo Streamlit no navegador.
 
+## Como gerar um executavel para Windows
+
+Se voce quiser distribuir o app para uma pessoa sem Python ou VS Code, gere o pacote com:
+
+```powershell
+python -m pip install -e .[dev]
+python -m pip install pyinstaller
+powershell -ExecutionPolicy Bypass -File .\scripts\build_exe.ps1 -Clean
+```
+
+O executavel sera criado em `dist\ATS Score Resume\ATS Score Resume.exe`.
+
+Ao abrir o `.exe`, o app sobe um servidor local e abre automaticamente o navegador padrao. Se quiser testar sem abrir o navegador automaticamente, rode:
+
+```powershell
+$env:ATS_SCORE_RESUME_NO_BROWSER="1"
+& ".\dist\ATS Score Resume\ATS Score Resume.exe"
+```
+
 ## IA opcional
 
 Se quiser ativar a reescrita automatica com IA, defina a chave antes de abrir o app:
